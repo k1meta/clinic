@@ -1,0 +1,49 @@
+"use client";
+
+import { createClient } from "@/lib/supabase-browser";
+import { useEffect, useState } from "react";
+
+export default function TopNav() {
+  const supabase = createClient();
+  const [displayName, setDisplayName] = useState("ClinicOS");
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setDisplayName(user.user_metadata?.full_name ?? user.email ?? "ClinicOS");
+      }
+    });
+  }, [supabase]);
+
+  return (
+    <header className="flex justify-between items-center h-16 px-8 sticky top-0 z-50 bg-white/80 backdrop-blur-xl shadow-sm font-headline font-semibold">
+      <div className="flex items-center gap-6 flex-1">
+        <div className="relative w-full max-w-md">
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+            search
+          </span>
+          <input
+            className="w-full bg-surface-container-low border-none rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary/20 transition-all font-body"
+            placeholder="Search patients, appointments, or records..."
+            type="text"
+          />
+        </div>
+      </div>
+      <div className="flex items-center gap-4">
+        <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-low transition-colors relative">
+          <span className="material-symbols-outlined text-slate-600">
+            notifications
+          </span>
+          <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full ring-2 ring-white"></span>
+        </button>
+        <div className="h-8 w-[1px] bg-surface-container-high mx-2"></div>
+        <div className="flex items-center gap-3">
+          <div className="text-right hidden sm:block">
+            <p className="text-xs font-bold leading-none">{displayName}</p>
+            <p className="text-[10px] text-slate-500 mt-1">v2.4.0</p>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}

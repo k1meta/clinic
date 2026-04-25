@@ -1,7 +1,20 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+const PUBLIC_API_PREFIXES = [
+  '/api/whatsapp/',
+  '/api/meta/',
+  '/api/sms/',
+  '/api/cron/',
+];
+
 export async function proxy(request: NextRequest) {
+  // Public webhook + cron routes — skip auth entirely
+  const { pathname } = request.nextUrl;
+  if (PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    return NextResponse.next();
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

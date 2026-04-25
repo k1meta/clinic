@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { patients } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
 
 export interface MatchedPatient {
   id: string;
@@ -34,10 +34,12 @@ export async function matchPatientByPhone(
   rawPhone: string,
 ): Promise<MatchedPatient | null> {
   const normalized = rawPhone.replace(/[\s\-\(\)]/g, '');
+  const withPlus = normalized.startsWith('+') ? normalized : '+' + normalized;
+  const withoutPlus = normalized.startsWith('+') ? normalized.slice(1) : normalized;
   const [p] = await db
     .select({ id: patients.id, clinicId: patients.clinicId, fullName: patients.fullName, phone: patients.phone })
     .from(patients)
-    .where(and(eq(patients.clinicId, clinicId), eq(patients.phone, normalized)))
+    .where(and(eq(patients.clinicId, clinicId), or(eq(patients.phone, withPlus), eq(patients.phone, withoutPlus))))
     .limit(1);
   return p ?? null;
 }
@@ -47,10 +49,13 @@ export async function matchWhatsAppPatient(
   clinicId: string,
   phone: string,
 ): Promise<MatchedPatient | null> {
+  // Meta sends phone without '+' (e.g. "38761809331"), DB stores with '+' ("+38761809331")
+  const withPlus = phone.startsWith('+') ? phone : '+' + phone;
+  const withoutPlus = phone.startsWith('+') ? phone.slice(1) : phone;
   const [p] = await db
     .select({ id: patients.id, clinicId: patients.clinicId, fullName: patients.fullName, phone: patients.phone })
     .from(patients)
-    .where(and(eq(patients.clinicId, clinicId), eq(patients.phone, phone)))
+    .where(and(eq(patients.clinicId, clinicId), or(eq(patients.phone, withPlus), eq(patients.phone, withoutPlus))))
     .limit(1);
   return p ?? null;
 }

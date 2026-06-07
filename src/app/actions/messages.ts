@@ -26,14 +26,26 @@ export async function getUnread() {
 export async function sendReply(input: { patientId: string; content: string; channel: 'whatsapp' | 'sms' }) {
   const clinicId = await getClinicId();
 
-  await sendMessage({
-    clinicId,
-    patientId: input.patientId,
-    channel: input.channel,
-    type: 'system',
-    content: input.content,
-  });
+  try {
+    const result = await sendMessage({
+      clinicId,
+      patientId: input.patientId,
+      channel: input.channel,
+      type: 'freetext',
+      content: input.content,
+    });
 
-  revalidatePath('/messages');
-  return { success: true };
+    if ('skipped' in result) {
+      const skippedMessages: Record<string, string> = {
+        patient_opted_out: 'This patient has opted out of messages.',
+      };
+      return { error: skippedMessages[result.skipped] ?? 'Message was not sent.' };
+    }
+
+    revalidatePath('/messages');
+    return { success: true as const };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to send message.';
+    return { error: message };
+  }
 }

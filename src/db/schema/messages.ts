@@ -6,7 +6,7 @@ import { appointments } from './appointments';
 export const messageChannelEnum = pgEnum('message_channel', ['whatsapp', 'sms', 'email', 'instagram', 'messenger']);
 export const messageDirectionEnum = pgEnum('message_direction', ['outbound', 'inbound']);
 export const messageTypeEnum = pgEnum('message_type', [
-  'reminder_48h', 'reminder_2h', 'post_visit', 're_engagement',
+  'reminder_48h', 'reminder_2h', 'post_visit', 're_engagement', 'review_request',
   'confirmation', 'cancellation', 'reschedule', 'freetext', 'system',
 ]);
 export const messageStatusEnum = pgEnum('message_status', [

@@ -113,19 +113,7 @@ export async function POST(request: NextRequest) {
             if (!isNaN(choiceNum)) finalText = String(choiceNum);
           }
 
-          const result = await handleInboundMessage({
-            channel: 'whatsapp',
-            senderId: phone,
-            senderName: null,
-            text: finalText,
-            clinicId,
-            patientId: patient?.id ?? null,
-            patientName: patient?.fullName ?? null,
-            currentState,
-            aiEnabled: settings.aiMessaging,
-          });
-
-          // Log inbound
+          // Log inbound first so it's preserved even if the AI call below throws.
           if (patient) {
             await db.insert(messages).values({
               clinicId,
@@ -138,6 +126,42 @@ export async function POST(request: NextRequest) {
               externalId: msg.id as string ?? '',
               readByStaff: false,
             });
+          }
+
+          // Run the AI conversation engine. If it throws (Groq quota, network,
+          // model error, etc.) we fall back to a polite Croatian system message
+          // so the patient is never left in silence.
+          let result;
+          try {
+            result = await handleInboundMessage({
+              channel: 'whatsapp',
+              senderId: phone,
+              senderName: null,
+              text: finalText,
+              clinicId,
+              patientId: patient?.id ?? null,
+              patientName: patient?.fullName ?? null,
+              currentState,
+              aiEnabled: settings.aiMessaging,
+            });
+          } catch (aiErr) {
+            console.error('[whatsapp webhook] AI error:', aiErr);
+            const fallback = 'Postovani, trenutno imamo tehnickih poteskoca u sistemu. Vasa poruka je zaprimljena, javit cemo Vam se uskoro.';
+            try { await sendTextMessage(phone, fallback); } catch { /* swallow send error */ }
+            if (patient) {
+              await db.insert(messages).values({
+                clinicId,
+                patientId: patient.id,
+                channel: 'whatsapp',
+                direction: 'outbound',
+                type: 'system',
+                status: 'sent',
+                content: fallback,
+                metadata: { error: aiErr instanceof Error ? aiErr.message : String(aiErr) },
+                readByStaff: false,
+              });
+            }
+            continue;
           }
 
           // Send AI reply
@@ -173,15 +197,27 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ status: 'ok' });
 }
 
+// Keep an in-flight conversation alive for at most this long. After 24 h with no
+// reply we restart the FSM so a stale slot list / awaiting_treatment doesn't
+// hijack a brand-new patient request.
+const CONV_STATE_TTL_MS = 24 * 60 * 60 * 1000;
+
 async function loadConvState(clinicId: string, patientId: string): Promise<ConvState | null> {
   const [last] = await db
-    .select({ metadata: messages.metadata })
+    .select({ metadata: messages.metadata, createdAt: messages.createdAt })
     .from(messages)
-    .where(eq(messages.patientId, patientId))
+    .where(and(eq(messages.patientId, patientId), eq(messages.clinicId, clinicId)))
     .orderBy(desc(messages.createdAt))
     .limit(1);
   if (!last?.metadata) return null;
+
+  const ageMs = Date.now() - new Date(last.createdAt).getTime();
+  if (ageMs > CONV_STATE_TTL_MS) return null;
+
   const m = last.metadata as Record<string, unknown>;
-  if (m.intent !== undefined || m.step !== undefined) return m as unknown as ConvState;
-  return null;
+  // Skip metadata blobs from non-AI rows (e.g. error/template metadata)
+  if (m.intent === undefined && m.step === undefined) return null;
+  // A finished conversation doesn't carry forward
+  if (m.step === 'done' || m.step === null) return null;
+  return m as unknown as ConvState;
 }

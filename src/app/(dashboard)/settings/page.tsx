@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic';
 
-import { getClinicId } from '@/db/queries/auth';
+import { requireAdmin } from '@/db/queries/auth';
 import { getAllDoctorsByClinic } from '@/db/queries/doctors';
 import { getAllTreatmentTypesByClinic } from '@/db/queries/treatment-types';
 import { getClinicSettings } from '@/db/queries/clinics';
+import { getStaffMembers } from '@/app/actions/staff';
 import AddDoctorForm from '@/components/AddDoctorForm';
 import AddTreatmentForm from '@/components/AddTreatmentForm';
 import DoctorList from '@/components/DoctorList';
@@ -11,6 +12,11 @@ import TreatmentList from '@/components/TreatmentList';
 import WorkHoursForm from '@/components/WorkHoursForm';
 import AiSettingsToggle from '@/components/AiSettingsToggle';
 import TestPhoneForm from '@/components/TestPhoneForm';
+import RunReminderScanButton from '@/components/RunReminderScanButton';
+import GoogleReviewUrlForm from '@/components/GoogleReviewUrlForm';
+import TeamPanel from '@/components/TeamPanel';
+import ChangeOwnPasswordForm from '@/components/ChangeOwnPasswordForm';
+import { redirect } from 'next/navigation';
 
 function formatHour(h: number) {
   if (h === 0) return '12:00 AM';
@@ -20,12 +26,20 @@ function formatHour(h: number) {
 }
 
 export default async function SettingsPage() {
-  const clinicId = await getClinicId();
+  let admin;
+  try {
+    admin = await requireAdmin();
+  } catch {
+    redirect('/');
+  }
 
-  const [doctors, treatments, settings] = await Promise.all([
+  const clinicId = admin.clinicId;
+
+  const [doctors, treatments, settings, staffMembers] = await Promise.all([
     getAllDoctorsByClinic(clinicId),
     getAllTreatmentTypesByClinic(clinicId),
     getClinicSettings(clinicId),
+    getStaffMembers(),
   ]);
 
   return (
@@ -77,6 +91,24 @@ export default async function SettingsPage() {
         </div>
       </div>
 
+      {/* Google review (first visit WhatsApp) */}
+      <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden mb-8">
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600">
+              <span className="material-symbols-outlined">reviews</span>
+            </div>
+            <div>
+              <h2 className="font-headline font-bold text-lg text-on-surface">Google reviews</h2>
+              <p className="text-[11px] text-slate-400">
+                After a patient&apos;s first completed appointment, we can send one WhatsApp message (with delay) asking for a review. Requires an approved WhatsApp template (see docs).
+              </p>
+            </div>
+          </div>
+          <GoogleReviewUrlForm currentUrl={settings.googleReviewUrl} />
+        </div>
+      </div>
+
       {/* Test Phone */}
       <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden mb-8">
         <div className="px-6 py-5">
@@ -92,6 +124,60 @@ export default async function SettingsPage() {
             </div>
           </div>
           <TestPhoneForm currentPhone={settings.testPhoneNumber} />
+        </div>
+      </div>
+
+      {/* Reminder Scan */}
+      <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden mb-8">
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+              <span className="material-symbols-outlined">notifications_active</span>
+            </div>
+            <div>
+              <h2 className="font-headline font-bold text-lg text-on-surface">Reminder Scan</h2>
+              <p className="text-[11px] text-slate-400">
+                Manually trigger the 48 h / 2 h / post-visit reminder scanners.
+              </p>
+            </div>
+          </div>
+          <RunReminderScanButton />
+        </div>
+      </div>
+
+      {/* Account Security */}
+      <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden mb-8">
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+              <span className="material-symbols-outlined">lock</span>
+            </div>
+            <div>
+              <h2 className="font-headline font-bold text-lg text-on-surface">Account Security</h2>
+              <p className="text-[11px] text-slate-400">
+                Change your admin login password. You will need your current password to confirm.
+              </p>
+            </div>
+          </div>
+          <ChangeOwnPasswordForm adminEmail={admin.email} />
+        </div>
+      </div>
+
+      {/* Team */}
+      <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden mb-8">
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center text-secondary">
+              <span className="material-symbols-outlined">groups</span>
+            </div>
+            <div>
+              <h2 className="font-headline font-bold text-lg text-on-surface">Team</h2>
+              <p className="text-[11px] text-slate-400">
+                Add staff with login credentials and manage their name, email, or password. They sign in via the Staff portal.
+              </p>
+            </div>
+          </div>
+          <TeamPanel members={staffMembers} currentUserId={admin.id} />
         </div>
       </div>
 

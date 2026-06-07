@@ -1,4 +1,5 @@
 import twilio from 'twilio';
+import { normalizeForSms } from '@/lib/phone';
 
 let _client: ReturnType<typeof twilio> | null = null;
 
@@ -20,6 +21,6 @@ export async function sendSms(to: string, body: string): Promise<SmsResult> {
   const from = process.env.TWILIO_PHONE_NUMBER;
   if (!from) throw new Error('TWILIO_PHONE_NUMBER is not set');
 
-  const message = await getClient().messages.create({ to, from, body });
+  const message = await getClient().messages.create({ to: normalizeForSms(to), from, body });
   return { externalId: message.sid };
 }

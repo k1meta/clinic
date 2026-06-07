@@ -19,7 +19,7 @@ export const appointments = pgTable('appointments', {
   clinicId: uuid('clinic_id').notNull().references(() => clinics.id, { onDelete: 'cascade' }),
   patientId: uuid('patient_id').notNull().references(() => patients.id, { onDelete: 'cascade' }),
   doctorId: uuid('doctor_id').notNull().references(() => doctors.id, { onDelete: 'cascade' }),
-  treatmentTypeId: uuid('treatment_type_id').references(() => treatmentTypes.id),
+  treatmentTypeId: uuid('treatment_type_id').references(() => treatmentTypes.id, { onDelete: 'set null' }),
   startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
   endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
   status: appointmentStatusEnum('status').notNull().default('confirmed'),

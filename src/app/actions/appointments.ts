@@ -101,6 +101,15 @@ export async function updateAppointmentStatus(id: string, status: string, cancel
     })
     .where(and(eq(appointments.id, id), eq(appointments.clinicId, clinicId)));
 
+  if (parsed.data.status === 'completed') {
+    try {
+      const { scheduleReviewRequestIfEligible } = await import('@/lib/schedule-review-request');
+      await scheduleReviewRequestIfEligible({ clinicId, appointmentId: id });
+    } catch (e) {
+      console.error('[updateAppointmentStatus] scheduleReviewRequestIfEligible:', e);
+    }
+  }
+
   revalidatePath('/');
   revalidatePath('/calendar');
   revalidatePath('/patients');

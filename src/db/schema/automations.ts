@@ -1,9 +1,17 @@
 import { pgTable, uuid, text, timestamp, boolean, integer, pgEnum } from 'drizzle-orm/pg-core';
 import { clinics } from './clinics';
 
-export const automationTypeEnum = pgEnum('automation_type', [
-  'reminder_48h', 'reminder_2h', 'post_visit', 're_engagement',
-]);
+export const automationTypeValues = [
+  'reminder_48h',
+  'reminder_2h',
+  'post_visit',
+  're_engagement',
+  'review_request',
+] as const;
+
+export type AutomationTypeName = (typeof automationTypeValues)[number];
+
+export const automationTypeEnum = pgEnum('automation_type', automationTypeValues);
 
 export const automations = pgTable('automations', {
   id: uuid('id').defaultRandom().primaryKey(),

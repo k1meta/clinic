@@ -3,11 +3,11 @@
 import { db } from '@/db';
 import { automations } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { getClinicId } from '@/db/queries/auth';
+import { requireAdmin } from '@/db/queries/auth';
 import { revalidatePath } from 'next/cache';
 
 export async function getAutomations() {
-  const clinicId = await getClinicId();
+  const { clinicId } = await requireAdmin();
   return db
     .select({
       id: automations.id,
@@ -23,7 +23,7 @@ export async function getAutomations() {
 }
 
 export async function toggleAutomation(automationId: string) {
-  const clinicId = await getClinicId();
+  const { clinicId } = await requireAdmin();
 
   const [auto] = await db
     .select({ isEnabled: automations.isEnabled })
@@ -44,7 +44,7 @@ export async function toggleAutomation(automationId: string) {
 }
 
 export async function updateAutomationTemplate(automationId: string, templateContent: string) {
-  const clinicId = await getClinicId();
+  const { clinicId } = await requireAdmin();
 
   await db
     .update(automations)
@@ -56,7 +56,7 @@ export async function updateAutomationTemplate(automationId: string, templateCon
 }
 
 export async function updateQuietHours(automationId: string, start: number, end: number) {
-  const clinicId = await getClinicId();
+  const { clinicId } = await requireAdmin();
 
   await db
     .update(automations)

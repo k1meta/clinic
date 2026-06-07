@@ -1,4 +1,4 @@
-import { generateResponse } from './claude';
+import { generateResponse } from './llm';
 import type { TimeSlot } from '../availability';
 
 const SYSTEM_PROMPT = [

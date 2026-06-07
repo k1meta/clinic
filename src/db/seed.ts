@@ -7,8 +7,28 @@ import { doctors } from './schema/doctors';
 import { treatmentTypes } from './schema/treatment-types';
 import { patients } from './schema/patients';
 import { appointments } from './schema/appointments';
+import { automations } from './schema/automations';
+import { DEFAULT_TEMPLATES } from '../lib/templates';
 
 const DEMO_CLINIC_ID = '00000000-0000-0000-0000-000000000001';
+
+/**
+ * Normalize a phone string to E.164 (`+38761...`). Strips spaces, dashes, parens.
+ * Returns null if the input doesn't look like a valid international number.
+ */
+function toE164(raw: string): string | null {
+  const digits = raw.replace(/[\s\-\(\)]/g, '').trim();
+  if (!digits) return null;
+  const withPlus = digits.startsWith('+') ? digits : '+' + digits;
+  if (!/^\+[1-9]\d{6,14}$/.test(withPlus)) return null;
+  return withPlus;
+}
+
+/** Read TEST_PATIENT_PHONES env var into a list of normalized E.164 numbers. */
+function readTestPhones(): string[] {
+  const raw = process.env.TEST_PATIENT_PHONES ?? '';
+  return raw.split(',').map(s => toE164(s)).filter((s): s is string => s !== null);
+}
 
 async function seed() {
   const client = postgres(process.env.DATABASE_URL!, { prepare: false });
@@ -17,13 +37,28 @@ async function seed() {
   console.log('Seeding database...');
 
   // 1. Clinic
+  const defaultClinicSettings = {
+    workHours: { start: 8, end: 17 },
+    aiMessaging: true,
+    aiCalls: false,
+    testPhoneNumber: '',
+    googleReviewUrl: '',
+  };
   await db.insert(clinics).values({
     id: DEMO_CLINIC_ID,
     name: 'Primary Care Center',
     slug: 'primary-care',
     timezone: 'Europe/Sarajevo',
     phone: '+387 33 123 456',
+    settings: defaultClinicSettings,
   }).onConflictDoNothing();
+
+  // Always flip AI Messaging ON for the demo clinic, even on re-seed of an existing row.
+  // We merge into existing settings so manual overrides (work hours, test phone) survive.
+  const { eq: eqClinic } = await import('drizzle-orm');
+  const [existing] = await db.select({ settings: clinics.settings }).from(clinics).where(eqClinic(clinics.id, DEMO_CLINIC_ID)).limit(1);
+  const merged = { ...defaultClinicSettings, ...(existing?.settings as Record<string, unknown> ?? {}), aiMessaging: true };
+  await db.update(clinics).set({ settings: merged, updatedAt: new Date() }).where(eqClinic(clinics.id, DEMO_CLINIC_ID));
 
   // 2. Doctors
   const doctorValues = [
@@ -73,8 +108,30 @@ async function seed() {
     { id: '00000000-0000-0000-0000-000000000118', clinicId: DEMO_CLINIC_ID, fullName: 'Daniel Taylor', phone: '(555) 444-7777', email: 'dtaylor@email.com', dob: '1981-11-22', status: 'active' as const },
     { id: '00000000-0000-0000-0000-000000000119', clinicId: DEMO_CLINIC_ID, fullName: 'Sophia Anderson', phone: '(555) 555-8888', email: 'sanderson@email.com', dob: '1994-05-16', status: 'active' as const },
   ];
+  // Override the first N patient phones with real numbers from TEST_PATIENT_PHONES env var
+  // so AI WhatsApp scheduling can be tested end-to-end against actual devices.
+  const testPhones = readTestPhones();
+  for (let i = 0; i < testPhones.length && i < patientValues.length; i++) {
+    patientValues[i].phone = testPhones[i];
+  }
+
   for (const p of patientValues) {
     await db.insert(patients).values(p).onConflictDoNothing();
+  }
+
+  // For test patients we MUST update on re-run: onConflictDoNothing won't refresh
+  // the phone if the row already exists. Update phone explicitly for the first N.
+  if (testPhones.length > 0) {
+    const { eq } = await import('drizzle-orm');
+    for (let i = 0; i < testPhones.length && i < patientValues.length; i++) {
+      await db
+        .update(patients)
+        .set({ phone: testPhones[i], updatedAt: new Date() })
+        .where(eq(patients.id, patientValues[i].id));
+    }
+    console.log('  - applied ' + testPhones.length + ' test phone(s) to patient rows');
+  } else {
+    console.log('  - no TEST_PATIENT_PHONES set; patients keep placeholder numbers');
   }
 
   // 5. Appointments for today and this week
@@ -126,6 +183,23 @@ async function seed() {
 
   for (const a of apptValues) {
     await db.insert(appointments).values(a).onConflictDoNothing();
+  }
+
+  // 6. Automation rules (enabled by default so the reminder pipeline runs).
+  // Table has no unique key on (clinic_id, type), so we manually skip if a row already exists.
+  const automationRows = [
+    { clinicId: DEMO_CLINIC_ID, type: 'reminder_48h' as const,  channel: 'whatsapp', templateContent: DEFAULT_TEMPLATES.reminder_48h, isEnabled: true,  quietHoursStart: 21, quietHoursEnd: 8 },
+    { clinicId: DEMO_CLINIC_ID, type: 'reminder_2h' as const,   channel: 'sms',      templateContent: DEFAULT_TEMPLATES.reminder_2h,  isEnabled: true,  quietHoursStart: 21, quietHoursEnd: 8 },
+    { clinicId: DEMO_CLINIC_ID, type: 'post_visit' as const,    channel: 'whatsapp', templateContent: DEFAULT_TEMPLATES.post_visit,   isEnabled: true,  quietHoursStart: 21, quietHoursEnd: 8 },
+    { clinicId: DEMO_CLINIC_ID, type: 're_engagement' as const, channel: 'whatsapp', templateContent: DEFAULT_TEMPLATES.re_engagement,isEnabled: false, quietHoursStart: 21, quietHoursEnd: 8 },
+    { clinicId: DEMO_CLINIC_ID, type: 'review_request' as const, channel: 'whatsapp', templateContent: DEFAULT_TEMPLATES.review_request, isEnabled: true, quietHoursStart: 21, quietHoursEnd: 8 },
+  ];
+  const { eq: eqAuto, and: andAuto } = await import('drizzle-orm');
+  for (const a of automationRows) {
+    const [existingAuto] = await db.select({ id: automations.id }).from(automations)
+      .where(andAuto(eqAuto(automations.clinicId, a.clinicId), eqAuto(automations.type, a.type)))
+      .limit(1);
+    if (!existingAuto) await db.insert(automations).values(a);
   }
 
   console.log('Seed complete!');

@@ -8,6 +8,7 @@ import { getAllPatients } from "@/db/queries/patients";
 import { getClinicSettings } from "@/db/queries/clinics";
 import AppointmentModal from "@/components/AppointmentModal";
 import AppointmentStatusMenu from "@/components/AppointmentStatusMenu";
+import CalendarDatePicker from "@/components/CalendarDatePicker";
 import Link from "next/link";
 
 const ROW_HEIGHT_PX = 96;
@@ -22,7 +23,13 @@ const STATUS_STYLES: Record<string, { bg: string; border: string; textColor: str
 };
 
 function formatDateParam(d: Date) {
-  return d.toISOString().split('T')[0];
+  // Use local time components, NOT toISOString — otherwise in TZs east of UTC
+  // a date parsed from URL as local midnight gets serialized back as the
+  // previous UTC date, making Prev/Next a no-op past tomorrow.
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function formatHourLabel(h: number) {
@@ -126,6 +133,7 @@ export default async function CalendarPage({
               <Link href={`/calendar?date=${formatDateParam(nextDate)}`} className="p-1.5 hover:bg-white rounded-md transition-all">
                 <span className="material-symbols-outlined text-sm">chevron_right</span>
               </Link>
+              <CalendarDatePicker value={dateStr} />
             </div>
           </div>
           <div className="flex items-center gap-3">

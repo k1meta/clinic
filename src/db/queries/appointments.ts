@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, count, sql, sum } from 'drizzle-orm';
+import { eq, and, gte, lte, ne, count, sql, sum } from 'drizzle-orm';
 import { db } from '..';
 import { appointments, patients, doctors, treatmentTypes } from '../schema';
 
@@ -71,6 +71,10 @@ export async function getTodayAppointmentCount(clinicId: string) {
 
 export async function getUpcomingAppointments(clinicId: string, limit = 5) {
   const now = new Date();
+  // Only show today's remaining appointments on the overview page; tomorrow's
+  // and beyond live in /calendar. Also drop cancelled rows.
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
 
   return db
     .select({
@@ -95,7 +99,9 @@ export async function getUpcomingAppointments(clinicId: string, limit = 5) {
     .where(
       and(
         eq(appointments.clinicId, clinicId),
-        gte(appointments.startsAt, now)
+        gte(appointments.startsAt, now),
+        lte(appointments.startsAt, endOfDay),
+        ne(appointments.status, 'cancelled'),
       )
     )
     .orderBy(appointments.startsAt)

@@ -4,8 +4,16 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { patients } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { getClinicId } from '@/db/queries/auth';
+import { getClinicId, requireAdmin } from '@/db/queries/auth';
 import { revalidatePath } from 'next/cache';
+
+/** Accept any Postgres uuid-shaped id (seed data uses non-RFC-4122 ids). */
+const patientIdSchema = z
+  .string()
+  .regex(
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+    'Invalid patient',
+  );
 
 const createPatientSchema = z.object({
   fullName: z.string().min(1, 'Name is required').max(200),
@@ -57,7 +65,7 @@ export async function createPatient(formData: FormData) {
 }
 
 const updatePatientSchema = z.object({
-  id: z.string().uuid(),
+  id: patientIdSchema,
   fullName: z.string().min(1).max(200),
   phone: z.string().optional(),
   email: z.string().email().optional().or(z.literal('')),
@@ -108,4 +116,40 @@ export async function updatePatient(id: string, formData: FormData) {
 
   revalidatePath('/patients');
   return { success: true };
+}
+
+const deletePatientSchema = z.object({
+  patientId: patientIdSchema,
+});
+
+export async function deletePatient(patientId: string) {
+  const admin = await requireAdmin();
+  const parsed = deletePatientSchema.safeParse({ patientId });
+
+  if (!parsed.success) {
+    return { error: 'Invalid patient.' };
+  }
+
+  const [target] = await db
+    .select({ id: patients.id })
+    .from(patients)
+    .where(and(eq(patients.id, parsed.data.patientId), eq(patients.clinicId, admin.clinicId)))
+    .limit(1);
+
+  if (!target) {
+    return { error: 'Patient not found.' };
+  }
+
+  try {
+    await db
+      .delete(patients)
+      .where(and(eq(patients.id, parsed.data.patientId), eq(patients.clinicId, admin.clinicId)));
+  } catch {
+    return { error: 'Failed to remove patient. Please try again.' };
+  }
+
+  revalidatePath('/patients');
+  revalidatePath('/');
+  revalidatePath('/calendar');
+  return { success: true as const };
 }

@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic';
 
-import { getClinicId } from "@/db/queries/auth";
+import { getClinicContext } from "@/db/queries/auth";
 import { getPatientsByClinic, getPatientCount, getNewPatientCountThisMonth } from "@/db/queries/patients";
 import { getAppointmentsByPatientIds } from "@/db/queries/appointments";
 import PatientSearch from "@/components/PatientSearch";
@@ -14,7 +14,8 @@ export default async function PatientsPage({
   searchParams: Promise<{ q?: string; status?: string; page?: string }>;
 }) {
   const params = await searchParams;
-  const clinicId = await getClinicId();
+  const { clinicId, user } = await getClinicContext();
+  const canDelete = user.role === 'admin';
   const search = params.q ?? "";
   const status = params.status ?? "";
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
@@ -163,7 +164,7 @@ export default async function PatientsPage({
                         })()}
                       </td>
                       <td className="px-6 py-5 text-right">
-                        <PatientProfileModal patient={p} appointments={appointmentsByPatient.get(p.id) ?? []} />
+                        <PatientProfileModal patient={p} appointments={appointmentsByPatient.get(p.id) ?? []} canDelete={canDelete} />
                       </td>
                     </tr>
                   );
@@ -196,34 +197,6 @@ export default async function PatientsPage({
               </span>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Bottom Insight Cards */}
-      <div className="mt-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-gradient-to-br from-primary to-primary-container p-8 rounded-3xl text-white relative overflow-hidden">
-          <div className="relative z-10">
-            <h3 className="font-headline text-xl font-bold mb-2">Intelligence Highlight</h3>
-            <p className="text-sm opacity-90 max-w-md leading-relaxed mb-6">
-              You have {totalPatients.toLocaleString()} patients in the system with {newThisMonth} new patients this month.
-            </p>
-            <button className="px-5 py-2.5 bg-white/20 backdrop-blur-md rounded-xl text-xs font-bold uppercase tracking-widest border border-white/20 hover:bg-white/30 transition-all active:scale-95">
-              View Trends
-            </button>
-          </div>
-          <span className="material-symbols-outlined absolute -right-4 -bottom-4 text-[120px] opacity-10">auto_awesome</span>
-        </div>
-        <div className="bg-tertiary-container/10 border border-tertiary/10 rounded-3xl p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="h-10 w-10 rounded-xl bg-tertiary/20 flex items-center justify-center text-tertiary">
-              <span className="material-symbols-outlined">pending_actions</span>
-            </div>
-            <h3 className="font-headline text-lg font-bold">Incomplete Files</h3>
-          </div>
-          <p className="text-sm text-slate-400 text-center py-4">File completeness tracking coming soon.</p>
-          <button className="w-full mt-6 py-3 text-xs font-bold text-tertiary bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow">
-            Resolve All Issues
-          </button>
         </div>
       </div>
     </div>

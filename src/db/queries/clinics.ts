@@ -7,6 +7,8 @@ export type ClinicSettings = {
   aiMessaging: boolean;
   aiCalls: boolean;
   testPhoneNumber: string;
+  /** Google Maps / Business Profile review link for first-visit WhatsApp prompts. */
+  googleReviewUrl: string;
 };
 
 const DEFAULT_SETTINGS: ClinicSettings = {
@@ -14,6 +16,7 @@ const DEFAULT_SETTINGS: ClinicSettings = {
   aiMessaging: false,
   aiCalls: false,
   testPhoneNumber: '',
+  googleReviewUrl: '',
 };
 
 export async function getClinicSettings(clinicId: string): Promise<ClinicSettings> {
@@ -38,5 +41,6 @@ export async function getClinicSettings(clinicId: string): Promise<ClinicSetting
     aiMessaging: typeof raw.aiMessaging === 'boolean' ? raw.aiMessaging : DEFAULT_SETTINGS.aiMessaging,
     aiCalls: typeof raw.aiCalls === 'boolean' ? raw.aiCalls : DEFAULT_SETTINGS.aiCalls,
     testPhoneNumber: typeof raw.testPhoneNumber === 'string' ? raw.testPhoneNumber : DEFAULT_SETTINGS.testPhoneNumber,
+    googleReviewUrl: typeof raw.googleReviewUrl === 'string' ? raw.googleReviewUrl : DEFAULT_SETTINGS.googleReviewUrl,
   };
 }

@@ -5,12 +5,14 @@ const PUBLIC_API_PREFIXES = [
   '/api/whatsapp/',
   '/api/meta/',
   '/api/sms/',
+  '/api/voice/',
   '/api/cron/',
+  '/api/auth/login-profiles',
 ];
 
 export async function proxy(request: NextRequest) {
-  // Public webhook + cron routes — skip auth entirely
   const { pathname } = request.nextUrl;
+
   if (PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.next();
   }
@@ -43,17 +45,15 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isAuthPage =
-    request.nextUrl.pathname.startsWith('/sign-in') ||
-    request.nextUrl.pathname.startsWith('/sign-up');
+    pathname.startsWith('/sign-in') ||
+    pathname.startsWith('/sign-up');
 
-  // Not logged in and not on auth page → redirect to sign-in
   if (!user && !isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = '/sign-in';
     return NextResponse.redirect(url);
   }
 
-  // Logged in and on auth page → redirect to home
   if (user && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = '/';

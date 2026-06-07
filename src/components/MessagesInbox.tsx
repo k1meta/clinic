@@ -1,7 +1,19 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { getThread, sendReply } from '@/app/actions/messages';
+import { useEffect, useState, useTransition } from 'react';
+import { getConversations, getThread, sendReply } from '@/app/actions/messages';
+
+const POLL_INTERVAL_MS = 3000;
+
+function conversationsSignature(convos: Conversation[]): string {
+  return convos
+    .map((c) => `${c.patientId}:${c.lastAt}:${c.unreadCount}:${c.lastContent}`)
+    .join('|');
+}
+
+function threadSignature(msgs: Message[]): string {
+  return msgs.map((m) => `${m.id}:${m.status}`).join('|');
+}
 
 interface Conversation {
   patientId: string;
@@ -24,16 +36,53 @@ interface Message {
   createdAt: string;
 }
 
-export default function MessagesInbox({ conversations }: { conversations: Conversation[] }) {
+export default function MessagesInbox({ conversations: initialConversations }: { conversations: Conversation[] }) {
+  const [conversations, setConversations] = useState(initialConversations);
   const [selected, setSelected] = useState<string | null>(null);
   const [thread, setThread] = useState<Message[]>([]);
   const [reply, setReply] = useState('');
+  const [sendError, setSendError] = useState('');
   const [isPending, startTransition] = useTransition();
 
   const selectedConvo = conversations.find(c => c.patientId === selected);
 
+  useEffect(() => {
+    let active = true;
+
+    async function poll() {
+      if (document.hidden) return;
+
+      const convos = await getConversations();
+      if (!active) return;
+
+      const convoSig = conversationsSignature(convos);
+      setConversations((prev) => {
+        if (conversationsSignature(prev) === convoSig) return prev;
+        return convos;
+      });
+
+      if (selected) {
+        const msgs = await getThread(selected);
+        if (!active) return;
+
+        const msgSig = threadSignature(msgs);
+        setThread((prev) => {
+          if (threadSignature(prev) === msgSig) return prev;
+          return msgs;
+        });
+      }
+    }
+
+    const id = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [selected]);
+
   function openThread(patientId: string) {
     setSelected(patientId);
+    setSendError('');
     startTransition(async () => {
       const msgs = await getThread(patientId);
       setThread(msgs);
@@ -42,9 +91,20 @@ export default function MessagesInbox({ conversations }: { conversations: Conver
 
   function handleSendReply() {
     if (!selected || !reply.trim()) return;
+    if (!selectedConvo?.patientPhone) {
+      setSendError('This patient has no phone number on file.');
+      return;
+    }
     const channel = selectedConvo?.lastChannel === 'sms' ? 'sms' as const : 'whatsapp' as const;
+    setSendError('');
     startTransition(async () => {
-      await sendReply({ patientId: selected, content: reply.trim(), channel });
+      const result = await sendReply({ patientId: selected, content: reply.trim(), channel });
+      if (result.error) {
+        setSendError(result.error);
+        const msgs = await getThread(selected);
+        setThread(msgs);
+        return;
+      }
       setReply('');
       const msgs = await getThread(selected);
       setThread(msgs);
@@ -58,7 +118,7 @@ export default function MessagesInbox({ conversations }: { conversations: Conver
     const diffHours = diffMs / (1000 * 60 * 60);
     if (diffHours < 1) return Math.floor(diffMs / 60000) + 'm ago';
     if (diffHours < 24) return Math.floor(diffHours) + 'h ago';
-    return d.toLocaleDateString('bs-BA', { day: '2-digit', month: '2-digit' });
+    return d.toLocaleDateString('hr-HR', { day: '2-digit', month: '2-digit' });
   }
 
   return (
@@ -148,6 +208,9 @@ export default function MessagesInbox({ conversations }: { conversations: Conver
             </div>
 
             {/* Reply input */}
+            {sendError && (
+              <p className="px-6 pt-3 text-sm text-red-600">{sendError}</p>
+            )}
             <div className="px-6 py-3 border-t border-surface-container-high/30 flex gap-2">
               <input
                 type="text"

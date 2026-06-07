@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { treatmentTypes } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { getClinicId } from '@/db/queries/auth';
+import { requireAdmin } from '@/db/queries/auth';
 import { revalidatePath } from 'next/cache';
 
 const addTreatmentSchema = z.object({
@@ -16,7 +16,7 @@ const addTreatmentSchema = z.object({
 export type AddTreatmentInput = z.infer<typeof addTreatmentSchema>;
 
 export async function addTreatmentType(input: AddTreatmentInput) {
-  const clinicId = await getClinicId();
+  const { clinicId } = await requireAdmin();
   const parsed = addTreatmentSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -41,7 +41,7 @@ export async function addTreatmentType(input: AddTreatmentInput) {
 }
 
 export async function deleteTreatmentType(id: string) {
-  const clinicId = await getClinicId();
+  const { clinicId } = await requireAdmin();
 
   try {
     await db
@@ -63,7 +63,7 @@ const updatePriceSchema = z.object({
 });
 
 export async function updateTreatmentPrice(id: string, price: number | null) {
-  const clinicId = await getClinicId();
+  const { clinicId } = await requireAdmin();
   const parsed = updatePriceSchema.safeParse({ id, price });
 
   if (!parsed.success) {

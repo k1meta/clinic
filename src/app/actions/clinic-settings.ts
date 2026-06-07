@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '@/db';
 import { clinics } from '@/db/schema';
 import { eq } from 'drizzle-orm';
-import { getClinicId } from '@/db/queries/auth';
+import { requireAdmin } from '@/db/queries/auth';
 import { revalidatePath } from 'next/cache';
 
 const workHoursSchema = z.object({
@@ -30,7 +30,7 @@ async function writeClinicSettings(clinicId: string, patch: Record<string, unkno
 }
 
 export async function updateWorkHours(input: { start: number; end: number }) {
-  const clinicId = await getClinicId();
+  const { clinicId } = await requireAdmin();
   const parsed = workHoursSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues.map(e => e.message).join(', ') };
@@ -48,7 +48,7 @@ const aiSettingsSchema = z.object({
 });
 
 export async function updateAiSettings(input: { aiMessaging: boolean; aiCalls: boolean }) {
-  const clinicId = await getClinicId();
+  const { clinicId } = await requireAdmin();
   const parsed = aiSettingsSchema.safeParse(input);
   if (!parsed.success) return { error: 'Invalid input' };
   await writeClinicSettings(clinicId, { aiMessaging: parsed.data.aiMessaging, aiCalls: parsed.data.aiCalls });
@@ -59,8 +59,27 @@ export async function updateAiSettings(input: { aiMessaging: boolean; aiCalls: b
 
 const phoneSchema = z.string().regex(/^\+[1-9]\d{6,14}$/, 'Phone must be in E.164 format (e.g. +38761123456)');
 
+const googleReviewUrlSchema = z
+  .string()
+  .max(2048)
+  .refine(
+    (s) => s === '' || /^https:\/\/.+/i.test(s.trim()),
+    'URL must be empty or start with https://',
+  );
+
+export async function updateGoogleReviewUrl(input: { url: string }) {
+  const { clinicId } = await requireAdmin();
+  const parsed = googleReviewUrlSchema.safeParse(input.url.trim());
+  if (!parsed.success) {
+    return { error: parsed.error.issues.map(e => e.message).join(', ') };
+  }
+  await writeClinicSettings(clinicId, { googleReviewUrl: parsed.data });
+  revalidatePath('/settings');
+  return { success: true };
+}
+
 export async function updateTestPhone(input: { phone: string }) {
-  const clinicId = await getClinicId();
+  const { clinicId } = await requireAdmin();
   if (input.phone === '') {
     await writeClinicSettings(clinicId, { testPhoneNumber: '' });
     revalidatePath('/settings');
@@ -73,8 +92,30 @@ export async function updateTestPhone(input: { phone: string }) {
   return { success: true };
 }
 
+/**
+ * Manually trigger the reminder scanners (48 h, 2 h, post-visit).
+ * Useful for testing without waiting for the every-15-minute cron.
+ *
+ * Requires the BullMQ worker (`npm run worker`) to be running; otherwise jobs
+ * sit in Redis until it comes online.
+ */
+export async function runReminderScanNow() {
+  await requireAdmin();
+  try {
+    const { getSchedulerQueue } = await import('@/lib/queue');
+    const queue = getSchedulerQueue();
+    await queue.add('scan-48h', {});
+    await queue.add('scan-2h', {});
+    await queue.add('scan-post-visit', {});
+    return { success: true, message: 'Reminder scan queued. Check the worker log for matches.' };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return { error: 'Failed to enqueue scan: ' + msg };
+  }
+}
+
 export async function sendTestMessage(input: { channel: 'whatsapp' | 'sms' }) {
-  const clinicId = await getClinicId();
+  const { clinicId } = await requireAdmin();
   const current = await readClinicSettings(clinicId);
   const phone = current.testPhoneNumber as string | undefined;
   if (!phone) return { error: 'No test phone number saved. Please save a number first.' };

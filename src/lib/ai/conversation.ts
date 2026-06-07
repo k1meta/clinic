@@ -1,7 +1,7 @@
 import { db } from '@/db';
 import { messages, doctors, treatmentTypes, appointments } from '@/db/schema';
 import { eq, and, gte, desc } from 'drizzle-orm';
-import { generateResponse } from './claude';
+import { generateResponse } from './llm';
 import { getAvailableSlots, getNextAvailableSlots } from '@/lib/availability';
 import type { TimeSlot } from '@/lib/availability';
 
@@ -116,10 +116,11 @@ async function classifyIntent(
     'For relative dates like "sutra/tomorrow" use today as reference.',
   ].join(' ');
 
-  const raw = await generateResponse(systemPrompt, 'Patient message: "' + patientMessage + '"', 300);
+  // Gemini's responseMimeType: 'application/json' guarantees a clean JSON body,
+  // so we can JSON.parse(raw) directly without the legacy regex scrub.
+  const raw = await generateResponse(systemPrompt, 'Patient message: "' + patientMessage + '"', 300, { json: true });
   try {
-    const cleaned = raw.replace(/^[^{]*/, '').replace(/[^}]*$/, '');
-    return JSON.parse(cleaned) as IntentResult;
+    return JSON.parse(raw) as IntentResult;
   } catch {
     return { intent: 'other', extractedDate: null, extractedTime: null, extractedDoctorName: null, extractedTreatmentName: null, extractedPhone: null, extractedFullName: null, slotChoiceIndex: null };
   }

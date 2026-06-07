@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { db } from '@/db';
 import { messages } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { getClinicSettings } from '@/db/queries/clinics';
 import { handleInboundMessage, type ConvState } from '@/lib/ai/conversation';
 import { matchPatientBySocialId } from '@/lib/ai/patient-matcher';
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
         const patient = await matchPatientBySocialId(clinicId, channel, senderId);
 
         // Load conversation state from last AI message
-        const currentState = await loadConvState(clinicId, patient?.id ?? null, channel);
+        const currentState = await loadConvState(clinicId, patient?.id ?? null);
 
         // Check aiMessaging setting
         const settings = await getClinicSettings(clinicId);
@@ -148,16 +148,23 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ status: 'ok' });
 }
 
-async function loadConvState(clinicId: string, patientId: string | null, channel: string): Promise<ConvState | null> {
+const CONV_STATE_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function loadConvState(clinicId: string, patientId: string | null): Promise<ConvState | null> {
   if (!patientId) return null;
   const [last] = await db
-    .select({ metadata: messages.metadata })
+    .select({ metadata: messages.metadata, createdAt: messages.createdAt })
     .from(messages)
-    .where(eq(messages.patientId, patientId))
-    .orderBy(messages.createdAt)
+    .where(and(eq(messages.patientId, patientId), eq(messages.clinicId, clinicId)))
+    .orderBy(desc(messages.createdAt))
     .limit(1);
   if (!last?.metadata) return null;
+
+  const ageMs = Date.now() - new Date(last.createdAt).getTime();
+  if (ageMs > CONV_STATE_TTL_MS) return null;
+
   const m = last.metadata as Record<string, unknown>;
-  if (m.intent !== undefined || m.step !== undefined) return m as unknown as ConvState;
-  return null;
+  if (m.intent === undefined && m.step === undefined) return null;
+  if (m.step === 'done' || m.step === null) return null;
+  return m as unknown as ConvState;
 }

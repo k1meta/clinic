@@ -1,20 +1,13 @@
 "use client";
 
-import { createClient } from "@/lib/supabase-browser";
-import { useEffect, useState } from "react";
+import type { UserRole } from "@/db/queries/auth";
 
-export default function TopNav() {
-  const supabase = createClient();
-  const [displayName, setDisplayName] = useState("ClinicOS");
+type TopNavProps = {
+  displayName: string;
+  role: UserRole;
+};
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setDisplayName(user.user_metadata?.full_name ?? user.email ?? "ClinicOS");
-      }
-    });
-  }, [supabase]);
-
+export default function TopNav({ displayName, role }: TopNavProps) {
   return (
     <header className="flex justify-between items-center h-16 px-8 sticky top-0 z-50 bg-white/80 backdrop-blur-xl shadow-sm font-headline font-semibold">
       <div className="flex items-center gap-6 flex-1">
@@ -40,7 +33,7 @@ export default function TopNav() {
         <div className="flex items-center gap-3">
           <div className="text-right hidden sm:block">
             <p className="text-xs font-bold leading-none">{displayName}</p>
-            <p className="text-[10px] text-slate-500 mt-1">v2.4.0</p>
+            <p className="text-[10px] text-slate-500 mt-1 capitalize">{role}</p>
           </div>
         </div>
       </div>

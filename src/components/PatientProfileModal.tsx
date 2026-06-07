@@ -1,7 +1,9 @@
 'use client';
 
 import { useRef, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { recordPayment, bulkPayBalance, waivePayment } from '@/app/actions/appointments';
+import { updatePatient, deletePatient } from '@/app/actions/patients';
 
 type AppointmentHistory = {
   id: string;
@@ -188,13 +190,19 @@ function BulkPayForm({ patientId, totalOutstanding, onDone }: { patientId: strin
 export default function PatientProfileModal({
   patient,
   appointments = [],
+  canDelete = false,
 }: {
   patient: Patient;
   appointments?: AppointmentHistory[];
+  canDelete?: boolean;
 }) {
+  const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [payingApptId, setPayingApptId] = useState<string | null>(null);
   const [showBulkPay, setShowBulkPay] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const [isPending, startTransition] = useTransition();
 
   function open() {
@@ -204,7 +212,40 @@ export default function PatientProfileModal({
   function close() {
     setPayingApptId(null);
     setShowBulkPay(false);
+    setIsEditing(false);
+    setEditError('');
+    setDeleteError('');
     dialogRef.current?.close();
+  }
+
+  function handleRemove() {
+    setDeleteError('');
+    const confirmed = confirm(
+      `Permanently remove ${patient.fullName}? This cannot be undone. All appointments and messages for this patient will also be deleted.`
+    );
+    if (!confirmed) return;
+
+    startTransition(async () => {
+      const result = await deletePatient(patient.id);
+      if (result.error) {
+        setDeleteError(result.error);
+        return;
+      }
+      close();
+      router.refresh();
+    });
+  }
+
+  function handleSaveEdit(formData: FormData) {
+    setEditError('');
+    startTransition(async () => {
+      const result = await updatePatient(patient.id, formData);
+      if (result && 'error' in result && result.error) {
+        setEditError(result.error);
+        return;
+      }
+      setIsEditing(false);
+    });
   }
 
   // Calculate balance using actual amounts
@@ -261,9 +302,20 @@ export default function PatientProfileModal({
                 </div>
               </div>
             </div>
-            <button onClick={close} className="p-1 hover:bg-surface-container-low rounded-lg transition-colors">
-              <span className="material-symbols-outlined text-slate-400">close</span>
-            </button>
+            <div className="flex items-center gap-1">
+              {!isEditing && (
+                <button
+                  onClick={() => { setIsEditing(true); setEditError(''); }}
+                  className="p-1 hover:bg-surface-container-low rounded-lg transition-colors text-slate-400 hover:text-primary"
+                  title="Edit patient details"
+                >
+                  <span className="material-symbols-outlined">edit</span>
+                </button>
+              )}
+              <button onClick={close} className="p-1 hover:bg-surface-container-low rounded-lg transition-colors">
+                <span className="material-symbols-outlined text-slate-400">close</span>
+              </button>
+            </div>
           </div>
 
           {/* Balance Summary */}
@@ -304,27 +356,160 @@ export default function PatientProfileModal({
 
           {/* Scrollable content */}
           <div className="overflow-y-auto flex-1 min-h-0">
-            {/* Details */}
-            <div className="px-6 pb-2">
-              <div className="space-y-0 divide-y divide-surface-container-high/30">
-                {fields.map(f => (
-                  <div key={f.label} className="flex items-center gap-3 py-3">
-                    <span className="material-symbols-outlined text-slate-400 text-lg">{f.icon}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{f.label}</p>
-                      <p className="text-sm text-on-surface truncate">{f.value || '\u2014'}</p>
-                    </div>
+            {/* Details (view or edit mode) */}
+            {!isEditing ? (
+              <>
+                <div className="px-6 pb-2">
+                  <div className="space-y-0 divide-y divide-surface-container-high/30">
+                    {fields.map(f => (
+                      <div key={f.label} className="flex items-center gap-3 py-3">
+                        <span className="material-symbols-outlined text-slate-400 text-lg">{f.icon}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{f.label}</p>
+                          <p className="text-sm text-on-surface truncate">{f.value || '\u2014'}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
 
-            {/* Notes */}
-            {patient.notes && (
-              <div className="mx-6 mb-4 p-3 bg-surface-container-low rounded-lg">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Notes</p>
-                <p className="text-sm text-on-surface-variant leading-relaxed">{patient.notes}</p>
-              </div>
+                {/* Notes */}
+                {patient.notes && (
+                  <div className="mx-6 mb-4 p-3 bg-surface-container-low rounded-lg">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Notes</p>
+                    <p className="text-sm text-on-surface-variant leading-relaxed">{patient.notes}</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <form action={handleSaveEdit} className="px-6 pb-4 space-y-3">
+                {editError && (
+                  <div className="p-2.5 bg-error/10 text-error text-xs rounded-lg font-medium">{editError}</div>
+                )}
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    name="fullName"
+                    defaultValue={patient.fullName}
+                    required
+                    className="w-full bg-surface-container-low rounded-lg py-2 px-3 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Phone</label>
+                    <input
+                      type="tel"
+                      name="phone"
+                      defaultValue={patient.phone ?? ''}
+                      placeholder="+387 61 123 456"
+                      className="w-full bg-surface-container-low rounded-lg py-2 px-3 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Email</label>
+                    <input
+                      type="email"
+                      name="email"
+                      defaultValue={patient.email ?? ''}
+                      placeholder="patient@email.com"
+                      className="w-full bg-surface-container-low rounded-lg py-2 px-3 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Date of Birth</label>
+                    <input
+                      type="date"
+                      name="dob"
+                      defaultValue={patient.dob ?? ''}
+                      className="w-full bg-surface-container-low rounded-lg py-2 px-3 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Gender</label>
+                    <select
+                      name="gender"
+                      defaultValue={patient.gender ?? ''}
+                      className="w-full bg-surface-container-low rounded-lg py-2 px-3 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body"
+                    >
+                      <option value="">Select...</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Address</label>
+                  <input
+                    type="text"
+                    name="address"
+                    defaultValue={patient.address ?? ''}
+                    placeholder="123 Main St, City"
+                    className="w-full bg-surface-container-low rounded-lg py-2 px-3 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Emergency Contact</label>
+                  <input
+                    type="text"
+                    name="emergencyContact"
+                    defaultValue={patient.emergencyContact ?? ''}
+                    placeholder="Name &mdash; Phone"
+                    className="w-full bg-surface-container-low rounded-lg py-2 px-3 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</label>
+                  <select
+                    name="status"
+                    defaultValue={patient.status}
+                    className="w-full bg-surface-container-low rounded-lg py-2 px-3 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body"
+                  >
+                    <option value="new">New</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Notes</label>
+                  <textarea
+                    name="notes"
+                    rows={2}
+                    defaultValue={patient.notes ?? ''}
+                    placeholder="Allergies, medical history, etc."
+                    className="w-full bg-surface-container-low rounded-lg py-2 px-3 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body resize-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIsEditing(false); setEditError(''); }}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-surface-container-low rounded-lg transition-colors"
+                    disabled={isPending}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    {isPending ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
             )}
 
             {/* Treatment History */}
@@ -422,8 +607,23 @@ export default function PatientProfileModal({
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-surface-container-high/30 flex justify-end shrink-0">
-            <button onClick={close} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-surface-container-low rounded-lg transition-colors">
+          <div className="px-6 py-4 border-t border-surface-container-high/30 flex items-center justify-between gap-4 shrink-0">
+            <div className="min-w-0">
+              {canDelete && !isEditing && (
+                <button
+                  type="button"
+                  onClick={handleRemove}
+                  disabled={isPending}
+                  className="px-3 py-2 text-xs font-bold uppercase tracking-widest border border-error text-error rounded-lg hover:bg-error/5 disabled:opacity-50 transition-colors"
+                >
+                  {isPending ? 'Removing...' : 'Remove patient'}
+                </button>
+              )}
+              {deleteError && (
+                <p className="mt-2 text-xs font-medium text-error">{deleteError}</p>
+              )}
+            </div>
+            <button onClick={close} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-surface-container-low rounded-lg transition-colors shrink-0">
               Close
             </button>
           </div>

@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase-browser';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { bootstrapAdmin } from '@/app/actions/auth';
 
 export default function SignUpPage() {
   const [fullName, setFullName] = useState('');
@@ -12,7 +12,6 @@ export default function SignUpPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [confirmationSent, setConfirmationSent] = useState(false);
-  const router = useRouter();
   const supabase = createClient();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -20,28 +19,35 @@ export default function SignUpPage() {
     setError('');
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName } },
-    });
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: fullName, role: 'admin' } },
+      });
 
-    if (error) {
-      setError(error.message);
+      if (signUpError) {
+        setError(signUpError.message);
+        return;
+      }
+
+      if (data.session) {
+        const bootstrap = await bootstrapAdmin({ email, fullName });
+        if (bootstrap.error) {
+          setError(bootstrap.error);
+          return;
+        }
+        await supabase.auth.updateUser({
+          data: { full_name: fullName, role: 'admin' },
+        });
+        window.location.assign('/');
+        return;
+      }
+
+      setConfirmationSent(true);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // If session exists, email confirmation is disabled — go straight to dashboard
-    if (data.session) {
-      router.push('/');
-      router.refresh();
-      return;
-    }
-
-    // Otherwise, email confirmation is required — show a message
-    setConfirmationSent(true);
-    setLoading(false);
   }
 
   if (confirmationSent) {
@@ -66,7 +72,7 @@ export default function SignUpPage() {
             <h2 className="text-lg font-headline font-bold">Check your email</h2>
             <p className="text-sm text-slate-500">
               We sent a confirmation link to <strong className="text-slate-700">{email}</strong>.
-              Click the link to activate your account, then sign in.
+              After confirming, sign in to your account. Your admin profile will be created on first sign-in.
             </p>
             <Link
               href="/sign-in"
@@ -95,7 +101,8 @@ export default function SignUpPage() {
               ClinicOS
             </span>
           </div>
-          <p className="text-sm text-slate-500">Create your clinic account</p>
+          <p className="text-sm text-slate-500">Create clinic admin account</p>
+          <p className="text-xs text-slate-400 mt-1">Staff accounts are created by your admin via invite.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl shadow-sm border border-surface-container-high/50 space-y-5">
@@ -128,7 +135,7 @@ export default function SignUpPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-surface-container-low rounded-lg py-2.5 px-4 text-sm focus:ring-2 focus:ring-primary/20 border-none font-body"
-              placeholder="you@clinic.com"
+              placeholder="owner@clinic.com"
               required
             />
           </div>
@@ -153,7 +160,7 @@ export default function SignUpPage() {
             disabled={loading}
             className="w-full py-2.5 clinical-gradient text-white text-sm font-bold rounded-lg shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50"
           >
-            {loading ? 'Creating account...' : 'Create Account'}
+            {loading ? 'Creating account...' : 'Create Admin Account'}
           </button>
 
           <p className="text-center text-xs text-slate-400 pt-2">

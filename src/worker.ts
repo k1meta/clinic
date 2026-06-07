@@ -4,10 +4,11 @@ config({ path: '.env.local' });
 import { Worker } from 'bullmq';
 import { getWorkerConnection } from '@/lib/redis';
 import { getSchedulerQueue } from '@/lib/queue';
-import type { SendMessageJobData, ProcessReplyJobData } from '@/lib/queue';
+import type { SendMessageJobData, ProcessReplyJobData, VoiceEventJobData } from '@/lib/queue';
 import { processSendMessage } from '@/jobs/send-message';
 import { processButtonReply } from '@/jobs/process-reply';
 import { scan48hReminders, scan2hReminders, scanPostVisit, scanReEngagement } from '@/jobs/scan-reminders';
+import { processVoiceEvent } from '@/jobs/process-voice-call';
 
 async function main() {
   const connection = getWorkerConnection();
@@ -34,6 +35,22 @@ async function main() {
 
   messagingWorker.on('failed', (job, err) => {
     console.error('[worker] Job failed:', job?.name, job?.id, err.message);
+  });
+
+  // Voice worker
+  const voiceWorker = new Worker(
+    'voice',
+    async (job) => {
+      console.log('[worker] Processing voice job:', job.name, job.id);
+      if (job.name === 'process-voice-event') {
+        await processVoiceEvent(job.data as VoiceEventJobData);
+      }
+    },
+    { connection: getWorkerConnection(), concurrency: 5 },
+  );
+
+  voiceWorker.on('failed', (job, err) => {
+    console.error('[worker] Voice job failed:', job?.name, job?.id, err.message);
   });
 
   // Scheduler worker
@@ -85,6 +102,7 @@ async function main() {
   const shutdown = async () => {
     console.log('[worker] Shutting down...');
     await messagingWorker.close();
+    await voiceWorker.close();
     await schedulerWorker.close();
     process.exit(0);
   };

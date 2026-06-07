@@ -43,8 +43,8 @@ export async function processButtonReply(data: ProcessReplyJobData) {
       .where(eq(appointments.id, appointmentId));
 
     const d = new Date(apt.startsAt);
-    const date = d.toLocaleDateString('bs-BA', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const time = d.toLocaleTimeString('bs-BA', { hour: '2-digit', minute: '2-digit' });
+    const date = d.toLocaleDateString('hr-HR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const time = d.toLocaleTimeString('hr-HR', { hour: '2-digit', minute: '2-digit' });
     const content = await generateConfirmation(patient.fullName, date, time, doctor?.fullName ?? '');
 
     await sendMessage({

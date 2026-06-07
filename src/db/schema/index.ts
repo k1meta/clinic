@@ -6,3 +6,4 @@ export { patients, patientStatusEnum } from './patients';
 export { appointments, appointmentStatusEnum, appointmentSourceEnum, paymentStatusEnum } from './appointments';
 export { messages, messageChannelEnum, messageDirectionEnum, messageTypeEnum, messageStatusEnum } from './messages';
 export { automations, automationTypeEnum } from './automations';
+export { calls, callDirectionEnum, callStatusEnum } from './calls';

@@ -1,0 +1,88 @@
+{
+  "agent_name": "ClinicOS BCS Receptionist",
+  "language": "bs-BA",
+  "voice_provider_note": "Pick a Bosnian-capable voice in Retell dashboard language picker.",
+  "telephony": {
+    "provider": "twilio",
+    "number_example": "+387XXXXXXXX"
+  },
+  "metadata_on_outbound_or_inbound": {
+    "clinicId": "00000000-0000-0000-0000-000000000001"
+  },
+  "system_prompt": "Ti si ljubazna recepcionistka privatne klinike. Govoris bosanski (ijekavica). Pomazes pacijentima da:\n- zakažu novi termin\n- pomjere postojeci termin\n- otkažu termin\n- provjere slobodne termine\n\nPravila:\n1. Na pocetku kratko pozdravi i pitaj kako mozes pomoci.\n2. Prije book/reschedule/cancel poziva odgovarajuci tool — potvrdi datum, vrijeme i namjeru.\n3. Za book/reschedule/cancel prvo pozovi check_availability ako termin nije siguran.\n4. Kad korisnik potvrdi slot, pozovi book_appointment ili reschedule_appointment ili cancel_appointment.\n5. Ako je termin zauzet, ponudi alternative iz tool odgovora.\n6. Budi kratak, jasan, profesionalan.\n7. Na kraju ponovi potvrdu: datum, vrijeme, doktor ako poznat.",
+  "custom_functions": [
+    {
+      "name": "check_availability",
+      "description": "Provjeri slobodne termine u kalendaru klinike.",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/check-availability",
+      "method": "POST",
+      "speak_during_execution": true,
+      "speak_during_execution_message": "Trenutak, provjeravam slobodne termine.",
+      "speak_after_execution": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "description": "Datum YYYY-MM-DD. Opcionalno." },
+          "time": { "type": "string", "description": "Vrijeme HH:MM. Opcionalno." },
+          "duration_min": { "type": "number", "description": "Trajanje u minutama, default 30." },
+          "doctor_id": { "type": "string", "description": "UUID doktora ako je poznat." },
+          "limit": { "type": "number", "description": "Broj slotova, default 5." }
+        }
+      }
+    },
+    {
+      "name": "book_appointment",
+      "description": "Zakazi potvrdeni termin za pozivatelja.",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/book",
+      "method": "POST",
+      "speak_during_execution": true,
+      "speak_during_execution_message": "Zakazujem termin, samo trenutak.",
+      "speak_after_execution": true,
+      "parameters": {
+        "type": "object",
+        "required": ["date", "time"],
+        "properties": {
+          "date": { "type": "string", "description": "Datum YYYY-MM-DD." },
+          "time": { "type": "string", "description": "Vrijeme HH:MM 24h." },
+          "duration_min": { "type": "number", "description": "Trajanje u minutama." },
+          "doctor_id": { "type": "string", "description": "UUID doktora." },
+          "patient_name": { "type": "string", "description": "Ime pacijenta ako nije u bazi." },
+          "phone": { "type": "string", "description": "Telefon pacijenta ako nije u call metadata." }
+        }
+      }
+    },
+    {
+      "name": "reschedule_appointment",
+      "description": "Pomjeri najblizi nadolazeci termin pacijenta.",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/reschedule",
+      "method": "POST",
+      "speak_during_execution": true,
+      "speak_after_execution": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "description": "Novi datum YYYY-MM-DD." },
+          "time": { "type": "string", "description": "Novo vrijeme HH:MM." },
+          "duration_min": { "type": "number", "description": "Trajanje u minutama." }
+        }
+      }
+    },
+    {
+      "name": "cancel_appointment",
+      "description": "Otkazi najblizi nadolazeci termin pacijenta.",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/cancel",
+      "method": "POST",
+      "speak_during_execution": true,
+      "speak_after_execution": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "reason": { "type": "string", "description": "Razlog otkazivanja." }
+        }
+      }
+    }
+  ],
+  "webhooks": {
+    "call_events": "https://YOUR_DOMAIN/api/voice/webhook"
+  }
+}

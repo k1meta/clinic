@@ -6,6 +6,7 @@ export async function getRecentCallsByClinic(clinicId: string, limit: number = 2
   return db
     .select({
       id: calls.id,
+      provider: calls.provider,
       providerCallId: calls.providerCallId,
       status: calls.status,
       direction: calls.direction,

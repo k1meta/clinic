@@ -27,7 +27,7 @@ export default async function VoiceAIPage() {
             Voice AI Control Center
           </h2>
           <p className="text-slate-500 mt-1">
-            Bosanski AI pozivi za zakazivanje, pomjeranje i otkazivanje termina.
+            Real-time AI pozivi — Retell (BCS) i ElevenLabs (English) za zakazivanje, pomjeranje i otkazivanje.
           </p>
         </div>
       </div>
@@ -108,7 +108,7 @@ export default async function VoiceAIPage() {
                       {call.patient?.fullName ?? call.fromNumber ?? 'Unknown caller'}
                     </p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {call.outcome ?? 'no_outcome'} • {call.status} • {call.direction}
+                      {call.provider} • {call.outcome ?? 'no_outcome'} • {call.status} • {call.direction}
                       {call.startedAt ? ` • ${new Date(call.startedAt).toLocaleString('bs-BA')}` : ''}
                     </p>
                     {call.summary && <p className="text-xs text-slate-600 mt-2">{call.summary}</p>}

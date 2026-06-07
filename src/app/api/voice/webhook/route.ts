@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
     direction: getDirection(payload),
     transcript: getTranscript(payload) || undefined,
     payload: payload as Record<string, unknown>,
+    reconcileOnly: true,
   });
 
   return NextResponse.json({ ok: true });

@@ -30,14 +30,17 @@ export interface RescheduleSelectionJobData {
 
 export interface VoiceEventJobData {
   clinicId: string;
-  provider: 'retell';
+  provider: 'retell' | 'elevenlabs';
   providerCallId: string;
   eventType: string;
   fromNumber?: string;
   toNumber?: string;
   direction?: 'inbound' | 'outbound';
   transcript?: string;
+  durationSec?: number;
   payload: Record<string, unknown>;
+  /** When true, worker only logs/reconciles — booking happens via real-time tool routes. */
+  reconcileOnly?: boolean;
 }
 
 // --- Queues ---

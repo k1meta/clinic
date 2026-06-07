@@ -1,0 +1,85 @@
+{
+  "agent_name": "ClinicOS English Receptionist",
+  "language": "en-US",
+  "telephony": {
+    "provider": "twilio_or_elevenlabs_sip",
+    "number_example": "+1XXXXXXXXXX"
+  },
+  "dynamic_variables": {
+    "clinicId": "00000000-0000-0000-0000-000000000001",
+    "from_number": "{{caller_phone}}"
+  },
+  "system_prompt": "You are a friendly private clinic receptionist. Help callers book, reschedule, or cancel appointments.\n\nRules:\n1. Greet briefly and ask how you can help.\n2. Before mutating appointments, confirm date, time, and intent.\n3. Use check_availability when the slot is uncertain.\n4. After caller confirms, call book_appointment, reschedule_appointment, or cancel_appointment.\n5. If a slot is unavailable, offer alternatives from the tool response.\n6. Keep responses concise and professional.\n7. End with a verbal confirmation of date and time.",
+  "server_tools": [
+    {
+      "name": "check_availability",
+      "description": "Check open appointment slots at the clinic.",
+      "method": "POST",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/check-availability",
+      "request_body_schema": {
+        "type": "object",
+        "properties": {
+          "clinicId": { "type": "string", "description": "Clinic UUID from dynamic variables." },
+          "date": { "type": "string", "description": "Date YYYY-MM-DD." },
+          "duration_min": { "type": "number", "description": "Duration in minutes." },
+          "doctor_id": { "type": "string", "description": "Doctor UUID if known." },
+          "limit": { "type": "number", "description": "Max slots to return." }
+        }
+      }
+    },
+    {
+      "name": "book_appointment",
+      "description": "Book a confirmed slot for the caller.",
+      "method": "POST",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/book",
+      "request_body_schema": {
+        "type": "object",
+        "required": ["date", "time"],
+        "properties": {
+          "clinicId": { "type": "string" },
+          "date": { "type": "string" },
+          "time": { "type": "string" },
+          "duration_min": { "type": "number" },
+          "doctor_id": { "type": "string" },
+          "patient_name": { "type": "string" },
+          "phone": { "type": "string" }
+        }
+      }
+    },
+    {
+      "name": "reschedule_appointment",
+      "description": "Move the caller's next upcoming appointment.",
+      "method": "POST",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/reschedule",
+      "request_body_schema": {
+        "type": "object",
+        "properties": {
+          "clinicId": { "type": "string" },
+          "date": { "type": "string" },
+          "time": { "type": "string" },
+          "duration_min": { "type": "number" }
+        }
+      }
+    },
+    {
+      "name": "cancel_appointment",
+      "description": "Cancel the caller's next upcoming appointment.",
+      "method": "POST",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/cancel",
+      "request_body_schema": {
+        "type": "object",
+        "properties": {
+          "clinicId": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "webhooks": {
+    "post_call": "https://YOUR_DOMAIN/api/voice/elevenlabs/webhook"
+  },
+  "auth": {
+    "header": "Authorization: Bearer YOUR_VOICE_TOOLS_API_KEY",
+    "or_signature": "ElevenLabs-Signature via ELEVENLABS_WEBHOOK_SECRET"
+  }
+}

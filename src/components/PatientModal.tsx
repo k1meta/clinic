@@ -43,11 +43,11 @@ export default function PatientModal() {
         className="backdrop:bg-black/50 bg-transparent p-0 m-auto rounded-2xl max-w-lg w-full"
         onClick={(e) => { if (e.target === dialogRef.current) close(); }}
       >
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="bg-surface-container-lowest rounded-2xl shadow-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-surface-container-high/50 flex items-center justify-between">
             <h2 className="font-headline font-bold text-lg">New Patient</h2>
             <button onClick={close} className="p-1 hover:bg-surface-container-low rounded-lg transition-colors">
-              <span className="material-symbols-outlined text-slate-400">close</span>
+              <span className="material-symbols-outlined text-on-surface-variant">close</span>
             </button>
           </div>
 
@@ -58,7 +58,7 @@ export default function PatientModal() {
 
             {/* Full Name */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Full Name *</label>
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Full Name *</label>
               <input
                 type="text"
                 name="fullName"
@@ -71,7 +71,7 @@ export default function PatientModal() {
             {/* Phone & Email */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Phone</label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Phone</label>
                 <input
                   type="tel"
                   name="phone"
@@ -80,7 +80,7 @@ export default function PatientModal() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Email</label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Email</label>
                 <input
                   type="email"
                   name="email"
@@ -93,7 +93,7 @@ export default function PatientModal() {
             {/* DOB & Gender */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Date of Birth</label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Date of Birth</label>
                 <input
                   type="date"
                   name="dob"
@@ -101,7 +101,7 @@ export default function PatientModal() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Gender</label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Gender</label>
                 <select name="gender" className="w-full bg-surface-container-low rounded-lg py-2.5 px-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body">
                   <option value="">Select...</option>
                   <option value="male">Male</option>
@@ -113,7 +113,7 @@ export default function PatientModal() {
 
             {/* Address */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Address</label>
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Address</label>
               <input
                 type="text"
                 name="address"
@@ -124,7 +124,7 @@ export default function PatientModal() {
 
             {/* Emergency Contact */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Emergency Contact</label>
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Emergency Contact</label>
               <input
                 type="text"
                 name="emergencyContact"
@@ -135,7 +135,7 @@ export default function PatientModal() {
 
             {/* Notes */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Notes</label>
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Notes</label>
               <textarea
                 name="notes"
                 rows={2}
@@ -146,7 +146,7 @@ export default function PatientModal() {
 
             {/* Actions */}
             <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={close} className="px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-surface-container-low rounded-lg transition-colors">
+              <button type="button" onClick={close} className="px-4 py-2.5 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors">
                 Cancel
               </button>
               <button

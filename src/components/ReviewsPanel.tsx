@@ -73,22 +73,22 @@ export default function ReviewsPanel({ reviews, stats }: Props) {
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-surface-container-lowest rounded-xl p-5 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total reviews</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Total reviews</p>
           <p className="text-2xl font-headline font-extrabold text-on-surface mt-1">{stats.total}</p>
         </div>
         <div className="bg-surface-container-lowest rounded-xl p-5 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Average rating</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Average rating</p>
           <p className="text-2xl font-headline font-extrabold text-on-surface mt-1">{stats.avgRating} / 5</p>
         </div>
         <div className="bg-surface-container-lowest rounded-xl p-5 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Draft replies</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Draft replies</p>
           <p className="text-2xl font-headline font-extrabold text-on-surface mt-1">{stats.pendingReplies}</p>
         </div>
       </div>
 
       <form onSubmit={handleImport} className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm space-y-4">
         <h2 className="font-headline font-bold text-lg">Import Google review</h2>
-        <p className="text-[11px] text-slate-400">
+        <p className="text-[11px] text-on-surface-variant">
           Paste reviews manually until Google Business Profile API sync is connected.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -127,7 +127,7 @@ export default function ReviewsPanel({ reviews, stats }: Props) {
 
       <div className="space-y-4">
         {rows.length === 0 ? (
-          <p className="text-sm text-slate-400">No reviews yet. Review requests are sent after first completed visits.</p>
+          <p className="text-sm text-on-surface-variant">No reviews yet. Review requests are sent after first completed visits.</p>
         ) : (
           rows.map((review) => (
             <div key={review.id} className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm">
@@ -135,9 +135,9 @@ export default function ReviewsPanel({ reviews, stats }: Props) {
                 <div>
                   <p className="font-semibold text-on-surface">{review.author}</p>
                   <p className="text-amber-500 text-sm">{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</p>
-                  {review.content && <p className="text-sm text-slate-600 mt-2">{review.content}</p>}
+                  {review.content && <p className="text-sm text-on-surface-variant mt-2">{review.content}</p>}
                 </div>
-                <span className="text-[10px] text-slate-400">
+                <span className="text-[10px] text-on-surface-variant">
                   {new Date(review.createdAt).toLocaleDateString()}
                 </span>
               </div>
@@ -157,7 +157,7 @@ export default function ReviewsPanel({ reviews, stats }: Props) {
                       type="button"
                       onClick={() => handleMarkPosted(review.id)}
                       disabled={isPending}
-                      className="text-xs font-semibold text-green-600 hover:underline disabled:opacity-60"
+                      className="text-xs font-semibold text-green-400 hover:underline disabled:opacity-60"
                     >
                       Mark as posted on Google
                     </button>
@@ -181,7 +181,7 @@ export default function ReviewsPanel({ reviews, stats }: Props) {
                   />
                 )}
                 {review.replyPostedAt && (
-                  <p className="text-xs text-green-600">Reply posted</p>
+                  <p className="text-xs text-green-400">Reply posted</p>
                 )}
               </div>
             </div>

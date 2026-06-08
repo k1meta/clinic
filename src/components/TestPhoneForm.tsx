@@ -52,9 +52,9 @@ export default function TestPhoneForm({ currentPhone }: Props) {
             value={phone}
             onChange={e => setPhone(e.target.value)}
             placeholder="+38761123456"
-            className="w-full px-3 py-2 rounded-lg border border-surface-container-high bg-surface-container-lowest text-sm text-on-surface placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            className="w-full px-3 py-2 rounded-lg border border-surface-container-high bg-surface-container-lowest text-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
           />
-          <p className="text-[10px] text-slate-400 mt-1">
+          <p className="text-[10px] text-on-surface-variant mt-1">
             E.164 format with country code (e.g. +38761123456)
           </p>
         </div>
@@ -68,7 +68,7 @@ export default function TestPhoneForm({ currentPhone }: Props) {
       </div>
 
       {status && (
-        <p className={"text-xs font-medium " + (status.type === 'error' ? 'text-red-600' : 'text-green-600')}>
+        <p className={"text-xs font-medium " + (status.type === 'error' ? 'text-red-400' : 'text-green-400')}>
           {status.text}
         </p>
       )}
@@ -99,7 +99,7 @@ export default function TestPhoneForm({ currentPhone }: Props) {
       </div>
 
       {sendStatus && (
-        <p className={"text-xs font-medium " + (sendStatus.type === 'error' ? 'text-red-600' : 'text-green-600')}>
+        <p className={"text-xs font-medium " + (sendStatus.type === 'error' ? 'text-red-400' : 'text-green-400')}>
           {sendStatus.text}
         </p>
       )}

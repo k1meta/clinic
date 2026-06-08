@@ -67,11 +67,11 @@ export default function SignUpPage() {
               </span>
             </div>
           </div>
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-surface-container-high/50 text-center space-y-4">
+          <div className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-surface-container-high/50 text-center space-y-4">
             <span className="material-symbols-outlined text-green-500 text-5xl">mark_email_read</span>
             <h2 className="text-lg font-headline font-bold">Check your email</h2>
-            <p className="text-sm text-slate-500">
-              We sent a confirmation link to <strong className="text-slate-700">{email}</strong>.
+            <p className="text-sm text-on-surface-variant">
+              We sent a confirmation link to <strong className="text-on-surface">{email}</strong>.
               After confirming, sign in to your account. Your admin profile will be created on first sign-in.
             </p>
             <Link
@@ -101,11 +101,11 @@ export default function SignUpPage() {
               ClinicOS
             </span>
           </div>
-          <p className="text-sm text-slate-500">Create clinic admin account</p>
-          <p className="text-xs text-slate-400 mt-1">Staff accounts are created by your admin via invite.</p>
+          <p className="text-sm text-on-surface-variant">Create clinic admin account</p>
+          <p className="text-xs text-on-surface-variant mt-1">Staff accounts are created by your admin via invite.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl shadow-sm border border-surface-container-high/50 space-y-5">
+        <form onSubmit={handleSubmit} className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-surface-container-high/50 space-y-5">
           {error && (
             <div className="p-3 bg-error/10 text-error text-sm rounded-lg font-medium">
               {error}
@@ -113,7 +113,7 @@ export default function SignUpPage() {
           )}
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">
               Full Name
             </label>
             <input
@@ -127,7 +127,7 @@ export default function SignUpPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">
               Email
             </label>
             <input
@@ -141,7 +141,7 @@ export default function SignUpPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
+            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2">
               Password
             </label>
             <input
@@ -163,7 +163,7 @@ export default function SignUpPage() {
             {loading ? 'Creating account...' : 'Create Admin Account'}
           </button>
 
-          <p className="text-center text-xs text-slate-400 pt-2">
+          <p className="text-center text-xs text-on-surface-variant pt-2">
             Already have an account?{' '}
             <Link href="/sign-in" className="text-primary font-bold hover:underline">
               Sign In

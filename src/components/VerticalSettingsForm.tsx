@@ -38,7 +38,7 @@ export default function VerticalSettingsForm({ vertical }: Props) {
         value={selected}
         onChange={(e) => handleChange(e.target.value as BusinessVertical)}
         disabled={isPending}
-        className="w-full max-w-md rounded-lg border border-surface-container-high bg-white px-3 py-2 text-sm"
+        className="form-control max-w-md"
       >
         {OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>
@@ -46,11 +46,11 @@ export default function VerticalSettingsForm({ vertical }: Props) {
           </option>
         ))}
       </select>
-      <p className="text-[11px] text-slate-400">
+      <p className="text-[11px] text-on-surface-variant">
         UI labels: {labels.customers}, {labels.providers}, {labels.appointment}s.
         Automation templates update to match this vertical.
       </p>
-      {saved && <p className="text-xs text-green-600 font-medium">Vertical saved</p>}
+      {saved && <p className="text-xs text-green-400 font-medium">Vertical saved</p>}
     </div>
   );
 }

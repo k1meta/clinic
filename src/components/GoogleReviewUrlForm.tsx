@@ -37,9 +37,9 @@ export default function GoogleReviewUrlForm({ currentUrl }: Props) {
             value={url}
             onChange={e => setUrl(e.target.value)}
             placeholder="https://g.page/r/.../review"
-            className="w-full px-3 py-2 rounded-lg border border-surface-container-high bg-surface-container-lowest text-sm text-on-surface placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            className="w-full px-3 py-2 rounded-lg border border-surface-container-high bg-surface-container-lowest text-sm text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
           />
-          <p className="text-[10px] text-slate-400 mt-1">
+          <p className="text-[10px] text-on-surface-variant mt-1">
             HTTPS link from Google Business Profile (Share review form). Used once per patient after their first completed visit.
           </p>
         </div>
@@ -53,7 +53,7 @@ export default function GoogleReviewUrlForm({ currentUrl }: Props) {
         </button>
       </div>
       {status && (
-        <p className={'text-xs font-medium ' + (status.type === 'error' ? 'text-red-600' : 'text-green-600')}>
+        <p className={'text-xs font-medium ' + (status.type === 'error' ? 'text-red-400' : 'text-green-400')}>
           {status.text}
         </p>
       )}

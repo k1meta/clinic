@@ -22,7 +22,7 @@ export default function RunReminderScanButton() {
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-slate-400">
+      <p className="text-xs text-on-surface-variant">
         Scans for appointments needing a 48 h reminder, a 2 h SMS nudge, or a post-visit
         follow-up and pushes matches to the worker queue. Runs automatically every 15 min.
       </p>
@@ -37,7 +37,7 @@ export default function RunReminderScanButton() {
         {isPending ? 'Queuing scan...' : 'Run reminder scan now'}
       </button>
       {status && (
-        <p className={'text-xs font-medium ' + (status.type === 'error' ? 'text-red-600' : 'text-green-600')}>
+        <p className={'text-xs font-medium ' + (status.type === 'error' ? 'text-red-400' : 'text-green-400')}>
           {status.text}
         </p>
       )}

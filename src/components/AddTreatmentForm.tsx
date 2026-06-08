@@ -35,7 +35,7 @@ export default function AddTreatmentForm() {
   return (
     <form onSubmit={handleSubmit} className="flex items-end gap-3">
       <div className="flex-1">
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Treatment Name</label>
+        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Treatment Name</label>
         <input
           type="text"
           value={name}
@@ -46,7 +46,7 @@ export default function AddTreatmentForm() {
         />
       </div>
       <div className="w-28">
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Duration</label>
+        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Duration</label>
         <input
           type="number"
           value={duration}
@@ -58,7 +58,7 @@ export default function AddTreatmentForm() {
         />
       </div>
       <div className="w-28">
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Price (BAM)</label>
+        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Price (BAM)</label>
         <input
           type="number"
           value={price}

@@ -17,7 +17,7 @@ export default async function CampaignsPage() {
   return (
     <div className="flex-1 p-8 overflow-y-auto max-w-4xl">
       <div className="mb-10">
-        <nav className="flex mb-2 space-x-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+        <nav className="flex mb-2 space-x-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
           <span>Engagement</span>
           <span>/</span>
           <span className="text-primary">Campaigns</span>
@@ -25,7 +25,7 @@ export default async function CampaignsPage() {
         <h1 className="font-headline text-3xl font-extrabold tracking-tight text-on-surface">
           SMS &amp; Email Campaigns
         </h1>
-        <p className="text-sm text-slate-400 mt-1">
+        <p className="text-sm text-on-surface-variant mt-1">
           One-off broadcasts to segmented patients — promos, seasonal offers, announcements.
         </p>
       </div>

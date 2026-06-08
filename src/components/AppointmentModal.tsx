@@ -114,11 +114,11 @@ export default function AppointmentModal({ doctors, treatmentTypes, patients, de
         className="backdrop:bg-black/50 bg-transparent p-0 m-auto rounded-2xl max-w-lg w-full"
         onClick={(e) => { if (e.target === dialogRef.current) close(); }}
       >
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="bg-surface-container-lowest rounded-2xl shadow-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-surface-container-high/50 flex items-center justify-between">
             <h2 className="font-headline font-bold text-lg">New Appointment</h2>
             <button type="button" onClick={close} className="p-1 hover:bg-surface-container-low rounded-lg transition-colors">
-              <span className="material-symbols-outlined text-slate-400">close</span>
+              <span className="material-symbols-outlined text-on-surface-variant">close</span>
             </button>
           </div>
 
@@ -129,11 +129,11 @@ export default function AppointmentModal({ doctors, treatmentTypes, patients, de
 
             {/* Patient Search */}
             <div className="relative">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Patient *</label>
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Patient *</label>
               {selectedPatient ? (
                 <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-4 py-2.5">
                   <span className="text-sm font-bold text-primary">{selectedPatient.fullName}</span>
-                  <button type="button" onClick={() => { setSelectedPatient(null); setPatientSearch(''); }} className="text-slate-400 hover:text-error">
+                  <button type="button" onClick={() => { setSelectedPatient(null); setPatientSearch(''); }} className="text-on-surface-variant hover:text-error">
                     <span className="material-symbols-outlined text-sm">close</span>
                   </button>
                 </div>
@@ -149,7 +149,7 @@ export default function AppointmentModal({ doctors, treatmentTypes, patients, de
                     className="w-full bg-surface-container-low rounded-lg py-2.5 px-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body"
                   />
                   {showPatientDropdown && filteredPatients.length > 0 && (
-                    <div className="absolute z-50 mt-1 w-full bg-white rounded-lg shadow-lg border border-surface-container-high/50 max-h-48 overflow-y-auto">
+                    <div className="absolute z-50 mt-1 w-full bg-surface-container-lowest rounded-lg shadow-lg border border-surface-container-high/50 max-h-48 overflow-y-auto">
                       {filteredPatients.map(p => (
                         <button
                           key={p.id}
@@ -169,7 +169,7 @@ export default function AppointmentModal({ doctors, treatmentTypes, patients, de
 
             {/* Doctor */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Doctor *</label>
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Doctor *</label>
               <select
                 value={doctorId}
                 onChange={(e) => setDoctorId(e.target.value)}
@@ -185,7 +185,7 @@ export default function AppointmentModal({ doctors, treatmentTypes, patients, de
 
             {/* Treatment Type */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Treatment</label>
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Treatment</label>
               <select
                 value={treatmentTypeId}
                 onChange={(e) => handleTreatmentChange(e.target.value)}
@@ -201,7 +201,7 @@ export default function AppointmentModal({ doctors, treatmentTypes, patients, de
             {/* Date & Time */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Date *</label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Date *</label>
                 <input
                   type="date"
                   value={date}
@@ -211,7 +211,7 @@ export default function AppointmentModal({ doctors, treatmentTypes, patients, de
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Time *</label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Time *</label>
                 <div className="flex items-center gap-1.5">
                   <select
                     value={hour}
@@ -222,7 +222,7 @@ export default function AppointmentModal({ doctors, treatmentTypes, patients, de
                       <option key={h} value={h}>{fmtHourLabel(h)}</option>
                     ))}
                   </select>
-                  <span className="text-slate-400 font-bold">:</span>
+                  <span className="text-on-surface-variant font-bold">:</span>
                   <select
                     value={minute}
                     onChange={(e) => setMinute(Number(e.target.value))}
@@ -238,7 +238,7 @@ export default function AppointmentModal({ doctors, treatmentTypes, patients, de
 
             {/* Duration */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Duration (minutes)</label>
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Duration (minutes)</label>
               <input
                 type="number"
                 value={duration}
@@ -251,7 +251,7 @@ export default function AppointmentModal({ doctors, treatmentTypes, patients, de
 
             {/* Notes */}
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Notes</label>
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5">Notes</label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -263,7 +263,7 @@ export default function AppointmentModal({ doctors, treatmentTypes, patients, de
 
             {/* Actions */}
             <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={close} className="px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-surface-container-low rounded-lg transition-colors">
+              <button type="button" onClick={close} className="px-4 py-2.5 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors">
                 Cancel
               </button>
               <button

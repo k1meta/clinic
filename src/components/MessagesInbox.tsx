@@ -132,7 +132,7 @@ export default function MessagesInbox({ conversations: initialConversations }: {
         </div>
         <div className="flex-1 overflow-y-auto">
           {conversations.length === 0 ? (
-            <div className="p-6 text-center text-sm text-slate-400">No messages yet</div>
+            <div className="p-6 text-center text-sm text-on-surface-variant">No messages yet</div>
           ) : (
             conversations.map(c => (
               <button
@@ -142,13 +142,13 @@ export default function MessagesInbox({ conversations: initialConversations }: {
               >
                 <div className="flex items-center justify-between mb-0.5">
                   <span className="text-sm font-semibold text-on-surface truncate">{c.patientName}</span>
-                  <span className="text-[10px] text-slate-400 shrink-0 ml-2">{formatTime(c.lastAt)}</span>
+                  <span className="text-[10px] text-on-surface-variant shrink-0 ml-2">{formatTime(c.lastAt)}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-xs text-slate-400">
+                  <span className="material-symbols-outlined text-xs text-on-surface-variant">
                     {c.lastChannel === 'sms' ? 'sms' : 'chat'}
                   </span>
-                  <span className="text-xs text-slate-500 truncate flex-1">{c.lastContent}</span>
+                  <span className="text-xs text-on-surface-variant truncate flex-1">{c.lastContent}</span>
                   {c.unreadCount > 0 && (
                     <span className="shrink-0 w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">
                       {c.unreadCount}
@@ -164,7 +164,7 @@ export default function MessagesInbox({ conversations: initialConversations }: {
       {/* Thread panel */}
       <div className="flex-1 flex flex-col">
         {!selected ? (
-          <div className="flex-1 flex items-center justify-center text-slate-400">
+          <div className="flex-1 flex items-center justify-center text-on-surface-variant">
             <div className="text-center">
               <span className="material-symbols-outlined text-4xl mb-2 block">forum</span>
               <p className="text-sm">Select a conversation</p>
@@ -179,7 +179,7 @@ export default function MessagesInbox({ conversations: initialConversations }: {
               </div>
               <div>
                 <p className="text-sm font-bold text-on-surface">{selectedConvo?.patientName}</p>
-                <p className="text-[10px] text-slate-400">{selectedConvo?.patientPhone ?? 'No phone'}</p>
+                <p className="text-[10px] text-on-surface-variant">{selectedConvo?.patientPhone ?? 'No phone'}</p>
               </div>
             </div>
 
@@ -190,11 +190,11 @@ export default function MessagesInbox({ conversations: initialConversations }: {
                   <div className={"max-w-[70%] rounded-2xl px-4 py-2 " + (msg.direction === 'outbound' ? 'bg-primary text-white' : 'bg-surface-container-high/40 text-on-surface')}>
                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                     <div className={"flex items-center gap-1.5 mt-1 " + (msg.direction === 'outbound' ? 'justify-end' : '')}>
-                      <span className={"text-[10px] " + (msg.direction === 'outbound' ? 'text-white/60' : 'text-slate-400')}>
+                      <span className={"text-[10px] " + (msg.direction === 'outbound' ? 'text-white/60' : 'text-on-surface-variant')}>
                         {formatTime(msg.createdAt)}
                       </span>
                       {msg.direction === 'outbound' && (
-                        <span className={"text-[10px] " + (msg.direction === 'outbound' ? 'text-white/60' : 'text-slate-400')}>
+                        <span className={"text-[10px] " + (msg.direction === 'outbound' ? 'text-white/60' : 'text-on-surface-variant')}>
                           {msg.status === 'read' ? '\u2713\u2713' : msg.status === 'delivered' ? '\u2713\u2713' : msg.status === 'sent' ? '\u2713' : msg.status === 'failed' ? '\u2717' : '\u23F3'}
                         </span>
                       )}

@@ -41,14 +41,14 @@ export default async function AnalyticsPage() {
       </div>
 
       <section className="space-y-4">
-        <h2 className="font-headline font-bold text-sm uppercase tracking-widest text-slate-400">
+        <h2 className="font-headline font-bold text-sm uppercase tracking-widest text-on-surface-variant">
           Revenue
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <MetricCard
             icon="payments"
-            iconBg="bg-green-100"
-            iconColor="text-green-600"
+            iconBg="bg-green-500/15"
+            iconColor="text-green-400"
             label="Revenue This Month"
             value={`${(monthlyRevenue.paid / 100).toFixed(0)} BAM`}
             sub={
@@ -56,7 +56,7 @@ export default async function AnalyticsPage() {
                 ? `${(monthlyRevenue.pending / 100).toFixed(0)} BAM pending`
                 : 'All collected'
             }
-            subColor={monthlyRevenue.pending > 0 ? 'text-amber-600' : 'text-green-600'}
+            subColor={monthlyRevenue.pending > 0 ? 'text-amber-400' : 'text-green-400'}
             subIcon={monthlyRevenue.pending > 0 ? 'schedule' : 'check_circle'}
           />
           <MetricCard
@@ -66,14 +66,14 @@ export default async function AnalyticsPage() {
             label="Pending Collection"
             value={`${(monthlyRevenue.pending / 100).toFixed(0)} BAM`}
             sub={monthlyRevenue.pending > 0 ? 'Outstanding this month' : 'Nothing outstanding'}
-            subColor={monthlyRevenue.pending > 0 ? 'text-amber-600' : 'text-green-600'}
+            subColor={monthlyRevenue.pending > 0 ? 'text-amber-400' : 'text-green-400'}
             subIcon={monthlyRevenue.pending > 0 ? 'warning' : 'check_circle'}
           />
         </div>
       </section>
 
       <section className="space-y-4">
-        <h2 className="font-headline font-bold text-sm uppercase tracking-widest text-slate-400">
+        <h2 className="font-headline font-bold text-sm uppercase tracking-widest text-on-surface-variant">
           Performance
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -84,7 +84,7 @@ export default async function AnalyticsPage() {
             label="No-Show Rate (30d)"
             value={`${noShowRate}%`}
             sub={noShowRate < 5 ? 'On target' : 'Needs attention'}
-            subColor={noShowRate < 5 ? 'text-green-600' : 'text-tertiary'}
+            subColor={noShowRate < 5 ? 'text-green-400' : 'text-tertiary'}
             subIcon={noShowRate < 5 ? 'trending_down' : 'trending_up'}
           />
           <MetricCard
@@ -94,14 +94,14 @@ export default async function AnalyticsPage() {
             label="Today's Appointments"
             value={String(todayCount)}
             sub="Scheduled for today"
-            subColor="text-slate-400"
+            subColor="text-on-surface-variant"
             subIcon="today"
           />
         </div>
       </section>
 
       <section className="space-y-4">
-        <h2 className="font-headline font-bold text-sm uppercase tracking-widest text-slate-400">
+        <h2 className="font-headline font-bold text-sm uppercase tracking-widest text-on-surface-variant">
           Engagement (30d)
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -112,7 +112,7 @@ export default async function AnalyticsPage() {
             label="Messages sent"
             value={String(engagement.messagesSent30d)}
             sub={`${engagement.messagesFailed30d} failed`}
-            subColor={engagement.messagesFailed30d > 0 ? 'text-amber-600' : 'text-green-600'}
+            subColor={engagement.messagesFailed30d > 0 ? 'text-amber-400' : 'text-green-400'}
             subIcon="mark_email_read"
           />
           <MetricCard
@@ -122,30 +122,30 @@ export default async function AnalyticsPage() {
             label="Review requests"
             value={String(engagement.reviewRequests30d)}
             sub={`${engagement.totalReviews} total reviews · ${engagement.avgReviewRating} avg`}
-            subColor="text-slate-400"
+            subColor="text-on-surface-variant"
             subIcon="star"
           />
           <MetricCard
             icon="campaign"
-            iconBg="bg-green-100"
-            iconColor="text-green-600"
+            iconBg="bg-green-500/15"
+            iconColor="text-green-400"
             label="Campaign messages"
             value={String(engagement.campaignMessages30d)}
             sub={`${engagement.reEngagement30d} re-engagement sends`}
-            subColor="text-slate-400"
+            subColor="text-on-surface-variant"
             subIcon="autorenew"
           />
         </div>
       </section>
 
       <section className="space-y-4">
-        <h2 className="font-headline font-bold text-sm uppercase tracking-widest text-slate-400">
+        <h2 className="font-headline font-bold text-sm uppercase tracking-widest text-on-surface-variant">
           Occupancy
         </h2>
         <div className="bg-surface-container-lowest p-6 rounded-xl shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-headline font-extrabold text-base text-on-surface">Weekly Occupancy</h3>
-            <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
               <div className="flex items-center gap-1">
                 <div className="w-2 h-2 rounded-full bg-primary" /> Scheduled
               </div>
@@ -168,7 +168,7 @@ export default async function AnalyticsPage() {
                     <div className="w-full h-[2px] bg-surface-container-high rounded-t-md" />
                   )}
                 </div>
-                <span className="text-[9px] font-bold text-slate-400">{d.day.slice(0, 3)}</span>
+                <span className="text-[9px] font-bold text-on-surface-variant">{d.day.slice(0, 3)}</span>
               </div>
             ))}
           </div>

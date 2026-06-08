@@ -27,7 +27,7 @@ export default function AddDoctorForm() {
   return (
     <form onSubmit={handleSubmit} className="flex items-end gap-3">
       <div className="flex-1">
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Full Name</label>
+        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Full Name</label>
         <input
           type="text"
           value={fullName}
@@ -38,7 +38,7 @@ export default function AddDoctorForm() {
         />
       </div>
       <div className="flex-1">
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Specialty</label>
+        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Specialty</label>
         <input
           type="text"
           value={specialty}

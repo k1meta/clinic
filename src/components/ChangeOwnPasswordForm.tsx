@@ -70,11 +70,11 @@ export default function ChangeOwnPasswordForm({ adminEmail }: ChangeOwnPasswordF
         <p className="text-sm font-medium text-error">{error}</p>
       )}
       {success && (
-        <p className="text-sm font-medium text-green-600">Password updated successfully.</p>
+        <p className="text-sm font-medium text-green-400">Password updated successfully.</p>
       )}
 
       <div>
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
           Current Password
         </label>
         <input
@@ -88,7 +88,7 @@ export default function ChangeOwnPasswordForm({ adminEmail }: ChangeOwnPasswordF
       </div>
 
       <div>
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
           New Password
         </label>
         <input
@@ -103,7 +103,7 @@ export default function ChangeOwnPasswordForm({ adminEmail }: ChangeOwnPasswordF
       </div>
 
       <div>
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
           Confirm New Password
         </label>
         <input

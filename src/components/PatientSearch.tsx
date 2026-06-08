@@ -34,7 +34,7 @@ export default function PatientSearch({
     <div className="bg-surface-container-lowest rounded-2xl p-6 mb-8 shadow-sm">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="md:col-span-2 relative">
-          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline">
             person_search
           </span>
           <input

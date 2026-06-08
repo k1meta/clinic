@@ -12,10 +12,10 @@ type Props = {
 
 const STATUS_OPTIONS = [
   { value: 'confirmed', label: 'Confirmed', icon: 'event_available', color: 'text-primary' },
-  { value: 'arrived', label: 'Arrived', icon: 'login', color: 'text-green-600' },
-  { value: 'completed', label: 'Completed', icon: 'check_circle', color: 'text-slate-600' },
-  { value: 'no_show', label: 'No Show', icon: 'person_cancel', color: 'text-red-600' },
-  { value: 'cancelled', label: 'Cancelled', icon: 'cancel', color: 'text-slate-400' },
+  { value: 'arrived', label: 'Arrived', icon: 'login', color: 'text-green-400' },
+  { value: 'completed', label: 'Completed', icon: 'check_circle', color: 'text-on-surface-variant' },
+  { value: 'no_show', label: 'No Show', icon: 'person_cancel', color: 'text-red-400' },
+  { value: 'cancelled', label: 'Cancelled', icon: 'cancel', color: 'text-outline' },
 ];
 
 const MENU_HEIGHT_ESTIMATE = 240;
@@ -88,11 +88,11 @@ export default function AppointmentStatusMenu({ appointmentId, currentStatus, ch
   const dropdown = open ? (
     <div
       ref={menuRef}
-      className="fixed z-[9999] bg-white rounded-xl shadow-xl border border-surface-container-high/50 py-1 min-w-[200px]"
+      className="fixed z-[9999] bg-surface-container-lowest rounded-xl shadow-xl border border-surface-container-high/50 py-1 min-w-[200px]"
       style={{ top: menuPos.y, left: menuPos.x, maxHeight: 'calc(100vh - 16px)', overflowY: 'auto' }}
     >
       <div className="px-3 py-2 border-b border-surface-container-high/30">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Change Status</p>
+        <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Change Status</p>
       </div>
       {STATUS_OPTIONS.map(opt => (
         <button
@@ -110,7 +110,7 @@ export default function AppointmentStatusMenu({ appointmentId, currentStatus, ch
       ))}
 
       {isPending && (
-        <div className="px-3 py-2 text-xs text-slate-400 text-center border-t border-surface-container-high/30">
+        <div className="px-3 py-2 text-xs text-on-surface-variant text-center border-t border-surface-container-high/30">
           Updating...
         </div>
       )}

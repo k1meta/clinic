@@ -35,11 +35,11 @@ export default async function OverviewPage() {
   }
 
   const statusStyles: Record<string, string> = {
-    arrived: 'bg-green-100 text-green-700',
+    arrived: 'bg-green-500/15 text-green-400',
     confirmed: 'bg-primary/10 text-primary',
-    completed: 'bg-slate-100 text-slate-600',
+    completed: 'bg-surface-container-high text-on-surface-variant',
     no_show: 'bg-error/10 text-error',
-    cancelled: 'bg-slate-100 text-slate-400',
+    cancelled: 'bg-surface-container-high text-outline',
   };
 
   return (
@@ -73,11 +73,11 @@ export default async function OverviewPage() {
           </a>
         </div>
         {upcoming.length === 0 ? (
-          <p className="text-sm text-slate-400 py-8 text-center">No upcoming appointments</p>
+          <p className="text-sm text-on-surface-variant py-8 text-center">No upcoming appointments</p>
         ) : (
           <table className="w-full text-left">
             <thead>
-              <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <tr className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">
                 <th className="pb-4 px-2">Patient</th>
                 <th className="pb-4 px-2">Treatment</th>
                 <th className="pb-4 px-2">Time</th>
@@ -101,7 +101,7 @@ export default async function OverviewPage() {
                   <td className="py-4 px-2 text-sm font-medium">{formatTime(apt.startsAt)}</td>
                   <td className="py-4 px-2 text-right">
                     <span
-                      className={`px-3 py-1 ${statusStyles[apt.status] ?? 'bg-slate-100 text-slate-600'} text-[10px] font-bold rounded-full capitalize`}
+                      className={`px-3 py-1 ${statusStyles[apt.status] ?? 'bg-surface-container-high text-on-surface-variant'} text-[10px] font-bold rounded-full capitalize`}
                     >
                       {apt.status.replace('_', ' ')}
                     </span>

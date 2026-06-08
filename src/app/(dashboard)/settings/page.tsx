@@ -47,13 +47,13 @@ export default async function SettingsPage() {
     <div className="flex-1 p-8 overflow-y-auto">
       {/* Header */}
       <div className="mb-10">
-        <nav className="flex mb-2 space-x-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+        <nav className="flex mb-2 space-x-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
           <span>Clinic</span>
           <span>/</span>
           <span className="text-primary">Settings</span>
         </nav>
         <h1 className="font-headline text-3xl font-extrabold tracking-tight text-on-surface">Settings</h1>
-        <p className="text-sm text-slate-400 mt-1">Manage your clinic&apos;s schedule, doctors, treatments, and AI features.</p>
+        <p className="text-sm text-on-surface-variant mt-1">Manage your clinic&apos;s schedule, doctors, treatments, and AI features.</p>
       </div>
 
       {/* Work Hours */}
@@ -65,7 +65,7 @@ export default async function SettingsPage() {
             </div>
             <div>
               <h2 className="font-headline font-bold text-lg text-on-surface">Work Hours</h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-on-surface-variant">
                 Currently {formatHour(settings.workHours.start)} &ndash; {formatHour(settings.workHours.end)} &middot; Calendar grid adjusts automatically
               </p>
             </div>
@@ -83,7 +83,7 @@ export default async function SettingsPage() {
             </div>
             <div>
               <h2 className="font-headline font-bold text-lg text-on-surface">Business type</h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-on-surface-variant">
                 Tailors automation copy and UI labels for your industry (clinic, salon, vet, etc.).
               </p>
             </div>
@@ -101,7 +101,7 @@ export default async function SettingsPage() {
             </div>
             <div>
               <h2 className="font-headline font-bold text-lg text-on-surface">AI Features</h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-on-surface-variant">
                 Control how AI handles incoming messages and phone calls for your clinic.
               </p>
             </div>
@@ -119,7 +119,7 @@ export default async function SettingsPage() {
             </div>
             <div>
               <h2 className="font-headline font-bold text-lg text-on-surface">Google reviews</h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-on-surface-variant">
                 After a patient&apos;s first completed appointment, we can send one WhatsApp message (with delay) asking for a review. Requires an approved WhatsApp template (see docs).
               </p>
             </div>
@@ -137,7 +137,7 @@ export default async function SettingsPage() {
             </div>
             <div>
               <h2 className="font-headline font-bold text-lg text-on-surface">Test Messaging</h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-on-surface-variant">
                 Save your phone number and send a test message to verify WhatsApp or SMS delivery.
               </p>
             </div>
@@ -155,7 +155,7 @@ export default async function SettingsPage() {
             </div>
             <div>
               <h2 className="font-headline font-bold text-lg text-on-surface">Reminder Scan</h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-on-surface-variant">
                 Manually trigger the 48 h / 2 h / post-visit reminder scanners.
               </p>
             </div>
@@ -173,7 +173,7 @@ export default async function SettingsPage() {
             </div>
             <div>
               <h2 className="font-headline font-bold text-lg text-on-surface">Account Security</h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-on-surface-variant">
                 Change your admin login password. You will need your current password to confirm.
               </p>
             </div>
@@ -191,7 +191,7 @@ export default async function SettingsPage() {
             </div>
             <div>
               <h2 className="font-headline font-bold text-lg text-on-surface">Team</h2>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-on-surface-variant">
                 Add staff with login credentials and manage their name, email, or password. They sign in via the Staff portal.
               </p>
             </div>
@@ -210,7 +210,7 @@ export default async function SettingsPage() {
               </div>
               <div>
                 <h2 className="font-headline font-bold text-lg text-on-surface">Doctors</h2>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-on-surface-variant">
                   {doctors.filter(d => d.isActive).length} active &middot; {doctors.filter(d => !d.isActive).length} inactive
                 </p>
               </div>
@@ -231,7 +231,7 @@ export default async function SettingsPage() {
               </div>
               <div>
                 <h2 className="font-headline font-bold text-lg text-on-surface">Treatments</h2>
-                <p className="text-[11px] text-slate-400">{treatments.length} treatment{treatments.length !== 1 ? 's' : ''} configured</p>
+                <p className="text-[11px] text-on-surface-variant">{treatments.length} treatment{treatments.length !== 1 ? 's' : ''} configured</p>
               </div>
             </div>
             <AddTreatmentForm />

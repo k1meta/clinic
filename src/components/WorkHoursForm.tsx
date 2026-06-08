@@ -41,7 +41,7 @@ export default function WorkHoursForm({ currentStart, currentEnd }: { currentSta
   return (
     <form onSubmit={handleSubmit} className="flex items-end gap-3 flex-wrap">
       <div className="flex-1 min-w-[140px]">
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Opens At</label>
+        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Opens At</label>
         <select
           value={start}
           onChange={(e) => setStart(Number(e.target.value))}
@@ -53,7 +53,7 @@ export default function WorkHoursForm({ currentStart, currentEnd }: { currentSta
         </select>
       </div>
       <div className="flex-1 min-w-[140px]">
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Closes At</label>
+        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Closes At</label>
         <select
           value={end}
           onChange={(e) => setEnd(Number(e.target.value))}

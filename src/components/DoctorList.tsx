@@ -24,8 +24,8 @@ export default function DoctorList({ doctors }: { doctors: Doctor[] }) {
   if (doctors.length === 0) {
     return (
       <div className="py-8 text-center">
-        <span className="material-symbols-outlined text-3xl text-slate-300 mb-1">person_off</span>
-        <p className="text-sm text-slate-400 mt-1">No doctors added yet. Add your first doctor above.</p>
+        <span className="material-symbols-outlined text-3xl text-outline mb-1">person_off</span>
+        <p className="text-sm text-on-surface-variant mt-1">No doctors added yet. Add your first doctor above.</p>
       </div>
     );
   }
@@ -40,10 +40,10 @@ export default function DoctorList({ doctors }: { doctors: Doctor[] }) {
             </div>
             <div>
               <p className="text-sm font-bold text-on-surface">{d.fullName}</p>
-              <p className="text-[11px] text-slate-400">{d.specialty}</p>
+              <p className="text-[11px] text-on-surface-variant">{d.specialty}</p>
             </div>
             {!d.isActive && (
-              <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-full uppercase tracking-wider">Inactive</span>
+              <span className="px-2 py-0.5 bg-surface-container-high text-on-surface-variant text-[10px] font-bold rounded-full uppercase tracking-wider">Inactive</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -51,7 +51,7 @@ export default function DoctorList({ doctors }: { doctors: Doctor[] }) {
               <button
                 onClick={() => handleDelete(d.id)}
                 disabled={isPending}
-                className="p-1.5 rounded-lg hover:bg-error/10 text-slate-400 hover:text-error transition-colors disabled:opacity-50"
+                className="p-1.5 rounded-lg hover:bg-error/10 text-on-surface-variant hover:text-error transition-colors disabled:opacity-50"
                 title="Deactivate doctor"
               >
                 <span className="material-symbols-outlined text-lg">person_remove</span>
@@ -60,7 +60,7 @@ export default function DoctorList({ doctors }: { doctors: Doctor[] }) {
               <button
                 onClick={() => handleRestore(d.id)}
                 disabled={isPending}
-                className="p-1.5 rounded-lg hover:bg-green-50 text-slate-400 hover:text-green-600 transition-colors disabled:opacity-50"
+                className="p-1.5 rounded-lg hover:bg-green-500/10 text-on-surface-variant hover:text-green-400 transition-colors disabled:opacity-50"
                 title="Restore doctor"
               >
                 <span className="material-symbols-outlined text-lg">person_add</span>

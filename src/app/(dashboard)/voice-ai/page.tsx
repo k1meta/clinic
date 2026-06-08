@@ -20,7 +20,7 @@ export default async function VoiceAIPage() {
           <h2 className="text-3xl font-black font-headline tracking-tight text-on-surface">
             Voice AI Control Center
           </h2>
-          <p className="text-slate-500 mt-1">
+          <p className="text-on-surface-variant mt-1">
             Real-time AI pozivi — Retell (BCS) i ElevenLabs (English) za zakazivanje, pomjeranje i otkazivanje.
           </p>
         </div>
@@ -37,44 +37,44 @@ export default async function VoiceAIPage() {
               <div>
                 <h3 className="text-lg font-bold font-headline">AI Call Handler Status</h3>
                 <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${settings.aiCalls ? 'bg-green-500' : 'bg-slate-400'}`}></span>
-                  <span className={`text-xs font-semibold ${settings.aiCalls ? 'text-green-600' : 'text-slate-500'}`}>
+                  <span className={`w-2 h-2 rounded-full ${settings.aiCalls ? 'bg-green-500' : 'bg-outline'}`}></span>
+                  <span className={`text-xs font-semibold ${settings.aiCalls ? 'text-green-400' : 'text-on-surface-variant'}`}>
                     {settings.aiCalls ? 'AKTIVAN' : 'ISKLJUCEN'}
                   </span>
                 </div>
               </div>
             </div>
-            <span className="text-xs font-bold px-3 py-1 rounded-full bg-surface-container-high text-slate-500">
+            <span className="text-xs font-bold px-3 py-1 rounded-full bg-surface-container-high text-on-surface-variant">
               {settings.aiCalls ? 'ON' : 'OFF'} (Settings)
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
             <div className="p-5 bg-surface-container-low rounded-lg flex flex-col gap-1">
-              <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Booking Resolution Rate (7d)</span>
+              <span className="text-on-surface-variant text-xs font-semibold uppercase tracking-wider">Booking Resolution Rate (7d)</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-black text-slate-700">{stats.resolutionRate}%</span>
+                <span className="text-3xl font-black text-on-surface">{stats.resolutionRate}%</span>
               </div>
               <div className="w-full bg-surface-container-high h-1.5 rounded-full mt-3">
                 <div className="bg-primary h-full rounded-full" style={{ width: `${stats.resolutionRate}%` }}></div>
               </div>
             </div>
             <div className="p-5 bg-surface-container-low rounded-lg flex flex-col gap-1">
-              <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Total Calls This Week</span>
+              <span className="text-on-surface-variant text-xs font-semibold uppercase tracking-wider">Total Calls This Week</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-black text-slate-700">{stats.total}</span>
+                <span className="text-3xl font-black text-on-surface">{stats.total}</span>
               </div>
-              <p className="text-xs text-slate-500 mt-2">{stats.resolved} calls zavrsilo uspjesnim zakazivanjem.</p>
+              <p className="text-xs text-on-surface-variant mt-2">{stats.resolved} calls zavrsilo uspjesnim zakazivanjem.</p>
             </div>
           </div>
         </div>
 
         <div className="col-span-12 lg:col-span-4 glass-card p-6 rounded-xl ai-spark-border flex flex-col shadow-sm">
           <h3 className="font-headline font-bold text-on-surface mb-3">Transcripts</h3>
-          <p className="text-sm text-slate-500 leading-relaxed">
+          <p className="text-sm text-on-surface-variant leading-relaxed">
             Select any call below to read the full conversation. ElevenLabs and Retell post-call webhooks
             populate transcripts automatically when the worker is running.
           </p>
-          <p className="text-xs text-slate-400 mt-4">
+          <p className="text-xs text-on-surface-variant mt-4">
             {recent.filter((c) => c.transcript?.trim()).length} of {recent.length} recent calls have transcripts.
           </p>
         </div>

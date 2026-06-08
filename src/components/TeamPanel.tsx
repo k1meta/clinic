@@ -166,16 +166,16 @@ export default function TeamPanel({ members, currentUserId }: TeamPanelProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Live team</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Live team</p>
           <p className="text-sm font-bold text-on-surface">{activeCount} active</p>
         </div>
-        <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-green-100 text-green-700">
+        <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-green-500/15 text-green-400">
           {members.length} total
         </span>
       </div>
 
       {members.length === 0 ? (
-        <p className="text-sm text-slate-400 py-4">No team members yet.</p>
+        <p className="text-sm text-on-surface-variant py-4">No team members yet.</p>
       ) : (
         <div className="space-y-3">
           {members.map((member) => {
@@ -199,20 +199,20 @@ export default function TeamPanel({ members, currentUserId }: TeamPanelProps) {
                         className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${
                           member.role === 'admin'
                             ? 'bg-primary/10 text-primary'
-                            : 'bg-surface-container-high text-slate-500'
+                            : 'bg-surface-container-high text-on-surface-variant'
                         }`}
                       >
                         {member.role}
                       </span>
                       <span
                         className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${
-                          member.isActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
+                          member.isActive ? 'bg-green-500/15 text-green-400' : 'bg-surface-container-high text-on-surface-variant'
                         }`}
                       >
                         {member.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 truncate mt-0.5">{member.email}</p>
+                    <p className="text-xs text-on-surface-variant truncate mt-0.5">{member.email}</p>
 
                     <div className="flex flex-wrap items-center gap-2 mt-3">
                       {canManage ? (
@@ -245,7 +245,7 @@ export default function TeamPanel({ members, currentUserId }: TeamPanelProps) {
                           </button>
                         </>
                       ) : (
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
                           {isSelf ? 'Current session' : 'Protected'}
                         </span>
                       )}
@@ -260,10 +260,10 @@ export default function TeamPanel({ members, currentUserId }: TeamPanelProps) {
                   >
                     {editError && <p className="sm:col-span-2 text-xs font-medium text-error">{editError}</p>}
                     {editSuccess && (
-                      <p className="sm:col-span-2 text-xs font-medium text-green-600">{editSuccess}</p>
+                      <p className="sm:col-span-2 text-xs font-medium text-green-400">{editSuccess}</p>
                     )}
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
                         Full Name
                       </label>
                       <input
@@ -275,7 +275,7 @@ export default function TeamPanel({ members, currentUserId }: TeamPanelProps) {
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
                         Email
                       </label>
                       <input
@@ -287,7 +287,7 @@ export default function TeamPanel({ members, currentUserId }: TeamPanelProps) {
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
                         New Password
                       </label>
                       <input
@@ -302,7 +302,7 @@ export default function TeamPanel({ members, currentUserId }: TeamPanelProps) {
                     </div>
                     {editPassword && (
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">
                           Confirm Password
                         </label>
                         <input
@@ -339,7 +339,7 @@ export default function TeamPanel({ members, currentUserId }: TeamPanelProps) {
           {createMessage && (
             <p
               className={`text-sm font-medium ${
-                createMessage.includes('created') ? 'text-green-600' : 'text-error'
+                createMessage.includes('created') ? 'text-green-400' : 'text-error'
               }`}
             >
               {createMessage}

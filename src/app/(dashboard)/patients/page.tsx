@@ -50,9 +50,9 @@ export default async function PatientsPage({
   }
 
   const statusStyles: Record<string, { color: string; avatarBg: string }> = {
-    active: { color: "bg-green-100 text-green-700", avatarBg: "bg-primary-fixed text-primary" },
-    new: { color: "bg-blue-100 text-blue-700", avatarBg: "bg-secondary-fixed text-secondary" },
-    inactive: { color: "bg-slate-100 text-slate-600", avatarBg: "bg-surface-container-highest text-slate-600" },
+    active: { color: "bg-green-500/15 text-green-400", avatarBg: "bg-primary-fixed text-primary" },
+    new: { color: "bg-blue-500/15 text-blue-400", avatarBg: "bg-secondary-fixed text-secondary" },
+    inactive: { color: "bg-surface-container-high text-on-surface-variant", avatarBg: "bg-surface-container-highest text-on-surface-variant" },
   };
 
   const showingStart = (page - 1) * data.limit + 1;
@@ -74,7 +74,7 @@ export default async function PatientsPage({
       {/* Header & Stats */}
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
         <div>
-          <nav className="flex mb-2 space-x-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          <nav className="flex mb-2 space-x-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
             <span>Clinical</span>
             <span>/</span>
             <span className="text-primary">Database</span>
@@ -83,14 +83,14 @@ export default async function PatientsPage({
         </div>
         <div className="flex items-center gap-6">
           <div className="flex gap-4">
-            <div className="px-5 py-3 bg-white border border-outline-variant/10 rounded-xl shadow-sm">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Total {labels.customers}</p>
+            <div className="px-5 py-3 bg-surface-container-lowest border border-outline-variant/10 rounded-xl shadow-sm">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">Total {labels.customers}</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-headline font-extrabold">{totalPatients.toLocaleString()}</span>
               </div>
             </div>
-            <div className="px-5 py-3 bg-white border border-outline-variant/10 rounded-xl shadow-sm">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">New This Month</p>
+            <div className="px-5 py-3 bg-surface-container-lowest border border-outline-variant/10 rounded-xl shadow-sm">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">New This Month</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-headline font-extrabold">{newThisMonth}</span>
                 <span className="text-xs font-bold text-tertiary">Fresh</span>
@@ -116,20 +116,20 @@ export default async function PatientsPage({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-surface-container-low/50">
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Name</th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">DOB</th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Phone</th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Email</th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Status</th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Balance</th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Balance</th>
-                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Actions</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Name</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">DOB</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Phone</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Email</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Status</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant text-right">Balance</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant text-right">Balance</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-container-low">
               {data.patients.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-slate-400">
+                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-on-surface-variant">
                     No patients found.
                   </td>
                 </tr>
@@ -145,7 +145,7 @@ export default async function PatientsPage({
                           </div>
                           <div>
                             <p className="text-sm font-bold text-on-surface">{p.fullName}</p>
-                            <p className="text-[11px] text-slate-400">{p.email ?? "--"}</p>
+                            <p className="text-[11px] text-on-surface-variant">{p.email ?? "--"}</p>
                           </div>
                         </div>
                       </td>
@@ -162,7 +162,7 @@ export default async function PatientsPage({
                           const patAppts = appointmentsByPatient.get(p.id) ?? [];
                           const unpaid = patAppts.reduce((sum, a) => a.paymentStatus !== 'paid' && a.paymentStatus !== 'waived' && a.amountCharged ? sum + (a.amountCharged - a.amountPaid) : sum, 0);
                           if (unpaid > 0) return <span className="text-sm font-bold text-amber-600">{(unpaid / 100).toFixed(2)} BAM</span>;
-                          return <span className="text-sm text-slate-300">--</span>;
+                          return <span className="text-sm text-outline">--</span>;
                         })()}
                       </td>
                       <td className="px-6 py-5 text-right">
@@ -176,25 +176,25 @@ export default async function PatientsPage({
           </table>
         </div>
         <div className="px-6 py-4 bg-surface-container-low/30 border-t border-surface-container-low flex items-center justify-between">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+          <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
             Showing {data.total === 0 ? 0 : showingStart}-{showingEnd} of {data.total.toLocaleString()} patients
           </p>
           <div className="flex gap-2">
             {hasPrev ? (
-              <Link href={pageUrl(page - 1)} className="p-2 rounded-lg bg-white border border-outline-variant/20 hover:bg-surface-container-high transition-colors active:scale-95">
+              <Link href={pageUrl(page - 1)} className="p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/20 hover:bg-surface-container-high transition-colors active:scale-95">
                 <span className="material-symbols-outlined text-sm">chevron_left</span>
               </Link>
             ) : (
-              <span className="p-2 rounded-lg bg-white border border-outline-variant/20 opacity-30">
+              <span className="p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/20 opacity-30">
                 <span className="material-symbols-outlined text-sm">chevron_left</span>
               </span>
             )}
             {hasNext ? (
-              <Link href={pageUrl(page + 1)} className="p-2 rounded-lg bg-white border border-outline-variant/20 hover:bg-surface-container-high transition-colors active:scale-95">
+              <Link href={pageUrl(page + 1)} className="p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/20 hover:bg-surface-container-high transition-colors active:scale-95">
                 <span className="material-symbols-outlined text-sm">chevron_right</span>
               </Link>
             ) : (
-              <span className="p-2 rounded-lg bg-white border border-outline-variant/20 opacity-30">
+              <span className="p-2 rounded-lg bg-surface-container-lowest border border-outline-variant/20 opacity-30">
                 <span className="material-symbols-outlined text-sm">chevron_right</span>
               </span>
             )}

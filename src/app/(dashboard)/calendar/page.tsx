@@ -16,10 +16,10 @@ const PX_PER_MIN = ROW_HEIGHT_PX / 60;
 
 const STATUS_STYLES: Record<string, { bg: string; border: string; textColor: string; badge?: string; badgeBg?: string }> = {
   confirmed: { bg: "bg-primary-fixed", border: "border-primary", textColor: "text-on-primary-fixed-variant" },
-  arrived:   { bg: "bg-secondary-fixed", border: "border-secondary", textColor: "text-on-secondary-fixed-variant", badge: "Arrived", badgeBg: "bg-green-100 text-green-700" },
-  completed: { bg: "bg-surface-container-high", border: "border-slate-400", textColor: "text-slate-600" },
+  arrived:   { bg: "bg-secondary-fixed", border: "border-secondary", textColor: "text-on-secondary-fixed-variant", badge: "Arrived", badgeBg: "bg-green-500/15 text-green-400" },
+  completed: { bg: "bg-surface-container-high", border: "border-outline-variant", textColor: "text-on-surface-variant" },
   no_show:   { bg: "bg-error/10", border: "border-error", textColor: "text-error" },
-  cancelled: { bg: "bg-surface-container-high", border: "border-slate-300", textColor: "text-slate-400" },
+  cancelled: { bg: "bg-surface-container-high", border: "border-outline-variant/50", textColor: "text-outline" },
 };
 
 function formatDateParam(d: Date) {
@@ -124,13 +124,13 @@ export default async function CalendarPage({
           <div className="flex items-center gap-6">
             <h2 className="text-2xl font-headline font-extrabold tracking-tight">{dateLabel}</h2>
             <div className="flex items-center bg-surface-container-low rounded-lg p-1">
-              <Link href={`/calendar?date=${formatDateParam(prevDate)}`} className="p-1.5 hover:bg-white rounded-md transition-all">
+              <Link href={`/calendar?date=${formatDateParam(prevDate)}`} className="p-1.5 hover:bg-surface-container-high rounded-md transition-all">
                 <span className="material-symbols-outlined text-sm">chevron_left</span>
               </Link>
-              <Link href="/calendar" className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${isToday ? 'bg-primary text-white shadow-sm' : 'bg-white shadow-sm'}`}>
+              <Link href="/calendar" className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${isToday ? 'bg-primary text-white shadow-sm' : 'bg-surface-container-lowest shadow-sm'}`}>
                 Today
               </Link>
-              <Link href={`/calendar?date=${formatDateParam(nextDate)}`} className="p-1.5 hover:bg-white rounded-md transition-all">
+              <Link href={`/calendar?date=${formatDateParam(nextDate)}`} className="p-1.5 hover:bg-surface-container-high rounded-md transition-all">
                 <span className="material-symbols-outlined text-sm">chevron_right</span>
               </Link>
               <CalendarDatePicker value={dateStr} />
@@ -141,13 +141,13 @@ export default async function CalendarPage({
               {doctors.slice(0, 3).map((doc) => {
                 const initials = doc.fullName.split(" ").map((n) => n[0]).join("").slice(0, 2);
                 return (
-                  <div key={doc.id} className="w-8 h-8 rounded-full bg-primary-fixed border-2 border-white flex items-center justify-center text-[10px] font-bold text-primary">
+                  <div key={doc.id} className="w-8 h-8 rounded-full bg-primary-fixed border-2 border-surface-container-lowest flex items-center justify-center text-[10px] font-bold text-primary">
                     {initials}
                   </div>
                 );
               })}
               {doctors.length > 3 && (
-                <div className="w-8 h-8 rounded-full bg-surface-container-high border-2 border-white flex items-center justify-center text-[10px] font-bold">
+                <div className="w-8 h-8 rounded-full bg-surface-container-high border-2 border-surface-container-lowest flex items-center justify-center text-[10px] font-bold">
                   +{doctors.length - 3}
                 </div>
               )}
@@ -171,7 +171,7 @@ export default async function CalendarPage({
             {doctors.map((doc) => (
               <div key={doc.id} className="p-4 text-center border-l border-outline-variant/10">
                 <p className="text-sm font-bold">{doc.fullName}</p>
-                <p className="text-[10px] text-slate-500 uppercase tracking-widest">{doc.specialty}</p>
+                <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">{doc.specialty}</p>
               </div>
             ))}
           </div>
@@ -183,9 +183,9 @@ export default async function CalendarPage({
                 const slotHour = GRID_START_HOUR + idx;
                 const isOutside = slotHour < settings.workHours.start || slotHour >= settings.workHours.end;
                 return (
-                  <div key={t} className={`h-24 p-4 text-right border-r border-outline-variant/10 ${isOutside ? 'bg-slate-50/80' : ''}`}>
-                    <span className={`text-xs font-medium ${isOutside ? 'text-slate-300 italic' : 'text-slate-400'}`}>{t}</span>
-                    {isOutside && <p className="text-[8px] text-slate-300 mt-0.5">After hours</p>}
+                  <div key={t} className={`h-24 p-4 text-right border-r border-outline-variant/10 ${isOutside ? 'bg-surface-container-low/60' : ''}`}>
+                    <span className={`text-xs font-medium ${isOutside ? 'text-outline italic' : 'text-on-surface-variant'}`}>{t}</span>
+                    {isOutside && <p className="text-[8px] text-outline mt-0.5">After hours</p>}
                   </div>
                 );
               })}
@@ -194,13 +194,13 @@ export default async function CalendarPage({
             {doctors.map((doc) => {
               const docAppointments = byDoctor.get(doc.id) ?? [];
               return (
-                <div key={doc.id} className="relative border-r border-outline-variant/10 bg-white/50">
+                <div key={doc.id} className="relative border-r border-outline-variant/10 bg-surface-container-low/30">
                   <div className="absolute inset-0 grid pointer-events-none" style={{ gridTemplateRows: `repeat(${TIME_SLOTS.length}, 1fr)` }}>
                     {TIME_SLOTS.map((_, i) => {
                       const slotHour = GRID_START_HOUR + i;
                       const isOutside = slotHour < settings.workHours.start || slotHour >= settings.workHours.end;
                       return (
-                        <div key={i} className={`border-b border-outline-variant/5 ${isOutside ? 'bg-slate-50/60' : ''}`}></div>
+                        <div key={i} className={`border-b border-outline-variant/5 ${isOutside ? 'bg-surface-container-low/40' : ''}`}></div>
                       );
                     })}
                   </div>
@@ -219,10 +219,10 @@ export default async function CalendarPage({
                               <p className={`text-[11px] font-bold ${style.textColor} truncate`}>
                                 <span className="opacity-70">{timeStr}</span> &mdash; {apt.patient.fullName}
                               </p>
-                              <p className={`text-[9px] ${style.textColor} opacity-70`}>
+                              <p className={`text-[9px] ${style.textColor}`}>
                                 {apt.treatmentType?.name ?? "Appointment"} &bull; {formatDuration(apt.startsAt, apt.endsAt)}
                                 {apt.amountCharged != null && (
-                                  <span className={`ml-1 inline-flex items-center font-bold ${apt.paymentStatus === 'paid' ? 'text-green-600' : apt.paymentStatus === 'waived' ? 'text-slate-400' : apt.paymentStatus === 'partial' ? 'text-blue-600' : 'text-amber-600'}`}>
+                                  <span className={`ml-1 inline-flex items-center font-bold ${apt.paymentStatus === 'paid' ? 'text-green-400' : apt.paymentStatus === 'waived' ? 'text-outline' : apt.paymentStatus === 'partial' ? 'text-blue-400' : 'text-amber-400'}`}>
                                     &bull; {apt.paymentStatus === 'partial' ? `${(apt.amountPaid / 100).toFixed(0)}/${(apt.amountCharged / 100).toFixed(0)}` : (apt.amountCharged / 100).toFixed(0)} BAM {apt.paymentStatus === 'paid' ? '\u2713' : apt.paymentStatus === 'waived' ? '~' : ''}
                                   </span>
                                 )}
@@ -235,7 +235,7 @@ export default async function CalendarPage({
                             )}
                           </div>
                           {apt.notes && pos.height > 48 && (
-                            <div className="mt-1 p-1 bg-white/40 rounded text-[9px] font-medium italic truncate">
+                            <div className="mt-1 p-1 bg-surface-container-high/60 rounded text-[9px] font-medium italic truncate text-on-surface-variant">
                               &quot;{apt.notes}&quot;
                             </div>
                           )}
@@ -252,16 +252,16 @@ export default async function CalendarPage({
         {/* Waiting List Sidebar */}
         <aside className="w-80 bg-surface-container-low border-l border-outline-variant/10 p-6 overflow-y-auto no-scrollbar hidden lg:block">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Waiting List</h3>
-            <span className="bg-surface-container-high text-slate-500 text-[10px] font-black px-2 py-0.5 rounded-full">0</span>
+            <h3 className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">Waiting List</h3>
+            <span className="bg-surface-container-high text-on-surface-variant text-[10px] font-black px-2 py-0.5 rounded-full">0</span>
           </div>
-          <p className="text-sm text-slate-400 text-center py-8">No patients on the waiting list.</p>
+          <p className="text-sm text-on-surface-variant text-center py-8">No patients on the waiting list.</p>
           <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 mt-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="material-symbols-outlined text-primary text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
               <span className="text-xs font-bold text-primary">AI Intelligence</span>
             </div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
+            <p className="text-[11px] text-on-surface-variant leading-relaxed">
               Waiting list automation will suggest optimal slot fills when cancellations occur.
             </p>
           </div>

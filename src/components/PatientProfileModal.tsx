@@ -59,24 +59,24 @@ function formatPrice(cents: number) {
 }
 
 const statusStyles: Record<string, string> = {
-  active: 'bg-green-100 text-green-700',
-  new: 'bg-blue-100 text-blue-700',
-  inactive: 'bg-slate-100 text-slate-600',
+  active: 'bg-green-500/15 text-green-400',
+  new: 'bg-blue-500/15 text-blue-400',
+  inactive: 'bg-surface-container-high text-on-surface-variant',
 };
 
 const apptStatusStyles: Record<string, { bg: string; dot: string }> = {
-  completed: { bg: 'bg-green-50 border-green-200', dot: 'bg-green-500' },
-  confirmed: { bg: 'bg-blue-50 border-blue-200', dot: 'bg-blue-500' },
-  arrived: { bg: 'bg-amber-50 border-amber-200', dot: 'bg-amber-500' },
-  no_show: { bg: 'bg-red-50 border-red-200', dot: 'bg-red-500' },
-  cancelled: { bg: 'bg-slate-50 border-slate-200', dot: 'bg-slate-400' },
+  completed: { bg: 'bg-green-500/10 border-green-500/30', dot: 'bg-green-500' },
+  confirmed: { bg: 'bg-blue-500/10 border-blue-500/30', dot: 'bg-blue-500' },
+  arrived: { bg: 'bg-amber-500/10 border-amber-500/30', dot: 'bg-amber-500' },
+  no_show: { bg: 'bg-red-500/10 border-red-500/30', dot: 'bg-red-500' },
+  cancelled: { bg: 'bg-surface-container-low border-outline-variant/50', dot: 'bg-outline' },
 };
 
 const paymentBadgeStyles: Record<string, string> = {
-  paid: 'bg-green-100 text-green-700',
-  partial: 'bg-blue-100 text-blue-700',
-  pending: 'bg-amber-100 text-amber-700',
-  waived: 'bg-slate-100 text-slate-500',
+  paid: 'bg-green-500/15 text-green-400',
+  partial: 'bg-blue-500/15 text-blue-400',
+  pending: 'bg-amber-500/15 text-amber-400',
+  waived: 'bg-surface-container-high text-on-surface-variant',
 };
 
 function PaymentForm({ appointmentId, remaining, onDone }: { appointmentId: string; remaining: number; onDone: () => void }) {
@@ -107,10 +107,10 @@ function PaymentForm({ appointmentId, remaining, onDone }: { appointmentId: stri
           max={(remaining / 100).toFixed(2)}
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          className="w-full pl-3 pr-12 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full pl-3 pr-12 py-1.5 text-sm border border-outline-variant/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
           disabled={isPending}
         />
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">BAM</span>
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-on-surface-variant">BAM</span>
       </div>
       <button
         type="submit"
@@ -123,7 +123,7 @@ function PaymentForm({ appointmentId, remaining, onDone }: { appointmentId: stri
         type="button"
         onClick={onDone}
         disabled={isPending}
-        className="px-2 py-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+        className="px-2 py-1.5 text-xs text-on-surface-variant hover:text-on-surface-variant transition-colors"
       >
         <span className="material-symbols-outlined text-sm">close</span>
       </button>
@@ -160,10 +160,10 @@ function BulkPayForm({ patientId, totalOutstanding, onDone }: { patientId: strin
           max={(totalOutstanding / 100).toFixed(2)}
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          className="w-full pl-3 pr-12 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full pl-3 pr-12 py-1.5 text-sm border border-outline-variant/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
           disabled={isPending}
         />
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">BAM</span>
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-on-surface-variant">BAM</span>
       </div>
       <button
         type="button"
@@ -179,7 +179,7 @@ function BulkPayForm({ patientId, totalOutstanding, onDone }: { patientId: strin
       >
         {isPending ? '...' : 'Pay'}
       </button>
-      <button type="button" onClick={onDone} disabled={isPending} className="px-2 py-1.5 text-xs text-slate-400 hover:text-slate-600">
+      <button type="button" onClick={onDone} disabled={isPending} className="px-2 py-1.5 text-xs text-on-surface-variant hover:text-on-surface-variant">
         <span className="material-symbols-outlined text-sm">close</span>
       </button>
       {error && <p className="text-[10px] text-red-500 font-bold">{error}</p>}
@@ -283,7 +283,7 @@ export default function PatientProfileModal({
         className="backdrop:bg-black/50 bg-transparent p-0 m-auto rounded-2xl max-w-lg w-full"
         onClick={(e) => { if (e.target === dialogRef.current) close(); }}
       >
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+        <div className="bg-surface-container-lowest rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
           {/* Header */}
           <div className="px-6 pt-6 pb-4 flex items-start justify-between shrink-0">
             <div className="flex items-center gap-4">
@@ -293,10 +293,10 @@ export default function PatientProfileModal({
               <div>
                 <h2 className="font-headline font-bold text-lg">{patient.fullName}</h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusStyles[patient.status] ?? 'bg-slate-100 text-slate-600'}`}>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusStyles[patient.status] ?? 'bg-surface-container-high text-on-surface-variant'}`}>
                     {patient.status}
                   </span>
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-on-surface-variant">
                     Since {new Date(patient.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
                   </span>
                 </div>
@@ -306,14 +306,14 @@ export default function PatientProfileModal({
               {!isEditing && (
                 <button
                   onClick={() => { setIsEditing(true); setEditError(''); }}
-                  className="p-1 hover:bg-surface-container-low rounded-lg transition-colors text-slate-400 hover:text-primary"
+                  className="p-1 hover:bg-surface-container-low rounded-lg transition-colors text-on-surface-variant hover:text-primary"
                   title="Edit patient details"
                 >
                   <span className="material-symbols-outlined">edit</span>
                 </button>
               )}
               <button onClick={close} className="p-1 hover:bg-surface-container-low rounded-lg transition-colors">
-                <span className="material-symbols-outlined text-slate-400">close</span>
+                <span className="material-symbols-outlined text-on-surface-variant">close</span>
               </button>
             </div>
           </div>
@@ -325,17 +325,17 @@ export default function PatientProfileModal({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-base text-primary">account_balance_wallet</span>
-                    <span className="text-xs font-bold text-slate-600">Balance</span>
+                    <span className="text-xs font-bold text-on-surface-variant">Balance</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs font-bold">
                     {balance > 0 && (
                       <span className="text-amber-600">{formatPrice(balance)} BAM unpaid</span>
                     )}
                     {balance === 0 && totalCharged > 0 && (
-                      <span className="text-green-600">All paid</span>
+                      <span className="text-green-400">All paid</span>
                     )}
-                    <span className="text-slate-400">{formatPrice(totalPaid)} paid</span>
-                    {totalWaived > 0 && <span className="text-slate-400">{formatPrice(totalWaived)} waived</span>}
+                    <span className="text-on-surface-variant">{formatPrice(totalPaid)} paid</span>
+                    {totalWaived > 0 && <span className="text-on-surface-variant">{formatPrice(totalWaived)} waived</span>}
                   </div>
                 </div>
                 {balance > 0 && !showBulkPay && (
@@ -363,9 +363,9 @@ export default function PatientProfileModal({
                   <div className="space-y-0 divide-y divide-surface-container-high/30">
                     {fields.map(f => (
                       <div key={f.label} className="flex items-center gap-3 py-3">
-                        <span className="material-symbols-outlined text-slate-400 text-lg">{f.icon}</span>
+                        <span className="material-symbols-outlined text-on-surface-variant text-lg">{f.icon}</span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{f.label}</p>
+                          <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">{f.label}</p>
                           <p className="text-sm text-on-surface truncate">{f.value || '\u2014'}</p>
                         </div>
                       </div>
@@ -376,7 +376,7 @@ export default function PatientProfileModal({
                 {/* Notes */}
                 {patient.notes && (
                   <div className="mx-6 mb-4 p-3 bg-surface-container-low rounded-lg">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Notes</p>
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Notes</p>
                     <p className="text-sm text-on-surface-variant leading-relaxed">{patient.notes}</p>
                   </div>
                 )}
@@ -388,7 +388,7 @@ export default function PatientProfileModal({
                 )}
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Full Name *</label>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Full Name *</label>
                   <input
                     type="text"
                     name="fullName"
@@ -400,7 +400,7 @@ export default function PatientProfileModal({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Phone</label>
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Phone</label>
                     <input
                       type="tel"
                       name="phone"
@@ -410,7 +410,7 @@ export default function PatientProfileModal({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Email</label>
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Email</label>
                     <input
                       type="email"
                       name="email"
@@ -423,7 +423,7 @@ export default function PatientProfileModal({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Date of Birth</label>
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Date of Birth</label>
                     <input
                       type="date"
                       name="dob"
@@ -432,7 +432,7 @@ export default function PatientProfileModal({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Gender</label>
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Gender</label>
                     <select
                       name="gender"
                       defaultValue={patient.gender ?? ''}
@@ -447,7 +447,7 @@ export default function PatientProfileModal({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Address</label>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Address</label>
                   <input
                     type="text"
                     name="address"
@@ -458,7 +458,7 @@ export default function PatientProfileModal({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Emergency Contact</label>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Emergency Contact</label>
                   <input
                     type="text"
                     name="emergencyContact"
@@ -469,7 +469,7 @@ export default function PatientProfileModal({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</label>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Status</label>
                   <select
                     name="status"
                     defaultValue={patient.status}
@@ -482,7 +482,7 @@ export default function PatientProfileModal({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Notes</label>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Notes</label>
                   <textarea
                     name="notes"
                     rows={2}
@@ -496,7 +496,7 @@ export default function PatientProfileModal({
                   <button
                     type="button"
                     onClick={() => { setIsEditing(false); setEditError(''); }}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-surface-container-low rounded-lg transition-colors"
+                    className="px-4 py-2 text-xs font-bold text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors"
                     disabled={isPending}
                   >
                     Cancel
@@ -516,18 +516,18 @@ export default function PatientProfileModal({
             <div className="px-6 pb-4">
               <div className="flex items-center gap-2 mb-3">
                 <span className="material-symbols-outlined text-primary text-lg">history</span>
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
                   Treatment History
                 </h3>
-                <span className="ml-auto text-[10px] font-bold text-slate-400">
+                <span className="ml-auto text-[10px] font-bold text-on-surface-variant">
                   {appointments.length} visit{appointments.length !== 1 ? 's' : ''}
                 </span>
               </div>
 
               {appointments.length === 0 ? (
                 <div className="py-6 text-center">
-                  <span className="material-symbols-outlined text-3xl text-slate-300 mb-1">event_busy</span>
-                  <p className="text-sm text-slate-400">No appointment history yet.</p>
+                  <span className="material-symbols-outlined text-3xl text-outline mb-1">event_busy</span>
+                  <p className="text-sm text-on-surface-variant">No appointment history yet.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -543,7 +543,7 @@ export default function PatientProfileModal({
                             <p className="text-sm font-bold text-on-surface truncate">
                               {appt.treatmentType?.name ?? 'General Visit'}
                             </p>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
+                            <p className="text-[11px] text-on-surface-variant mt-0.5">
                               Dr. {appt.doctor.fullName} &middot; {duration} min
                             </p>
                           </div>
@@ -551,14 +551,14 @@ export default function PatientProfileModal({
                             <p className="text-xs font-semibold text-on-surface">
                               {formatDateTime(appt.startsAt)}
                             </p>
-                            <p className="text-[11px] text-slate-400">
+                            <p className="text-[11px] text-on-surface-variant">
                               {formatTime(appt.startsAt)}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 mt-2">
                           <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`}></span>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
                             {appt.status.replace('_', ' ')}
                           </span>
                           {appt.amountCharged != null && (
@@ -571,7 +571,7 @@ export default function PatientProfileModal({
                         </div>
                         {/* Payment progress bar for partial */}
                         {appt.amountCharged != null && appt.paymentStatus === 'partial' && (
-                          <div className="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                          <div className="mt-2 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
                             <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${Math.round((appt.amountPaid / appt.amountCharged) * 100)}%` }}></div>
                           </div>
                         )}
@@ -580,7 +580,7 @@ export default function PatientProfileModal({
                           <div className="flex items-center gap-2 mt-2">
                             <button
                               onClick={() => setPayingApptId(appt.id)}
-                              className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-green-700 bg-green-50 rounded-md hover:bg-green-100 transition-colors"
+                              className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-green-400 bg-green-500/10 rounded-md hover:bg-green-500/15 transition-colors"
                             >
                               <span className="material-symbols-outlined text-xs">payments</span>
                               Record Payment
@@ -588,7 +588,7 @@ export default function PatientProfileModal({
                             <button
                               onClick={() => handleWaive(appt.id)}
                               disabled={isPending}
-                              className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-slate-500 bg-slate-50 rounded-md hover:bg-slate-100 transition-colors disabled:opacity-50"
+                              className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-on-surface-variant bg-surface-container-low rounded-md hover:bg-surface-container-high transition-colors disabled:opacity-50"
                             >
                               <span className="material-symbols-outlined text-xs">volunteer_activism</span>
                               Waive
@@ -623,7 +623,7 @@ export default function PatientProfileModal({
                 <p className="mt-2 text-xs font-medium text-error">{deleteError}</p>
               )}
             </div>
-            <button onClick={close} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-surface-container-low rounded-lg transition-colors shrink-0">
+            <button onClick={close} className="px-4 py-2 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors shrink-0">
               Close
             </button>
           </div>

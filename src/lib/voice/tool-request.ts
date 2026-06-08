@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import type { RetellVoiceWebhookPayload } from '@/lib/channels/voice/retell';
 import { getClinicIdFromPayload } from '@/lib/channels/voice/retell';
 
@@ -83,6 +83,89 @@ function resolveClinicId(
   );
 }
 
+const ELEVEN_META_KEYS = new Set([
+  'tool_call_id',
+  'tool_name',
+  'conversation_id',
+  'dynamic_variables',
+  'parameters',
+]);
+
+const TOOL_ARG_KEYS = new Set([
+  'clinicId',
+  'date',
+  'time',
+  'duration_min',
+  'durationMin',
+  'doctor_id',
+  'doctorId',
+  'patient_name',
+  'fullName',
+  'phone',
+  'from_number',
+  'limit',
+  'reason',
+]);
+
+function looksLikeElevenLabsFlatToolArgs(payload: Record<string, unknown>): boolean {
+  return Object.keys(payload).some((key) => TOOL_ARG_KEYS.has(key));
+}
+
+export function parseElevenLabsFlatToolBody(
+  body: Record<string, unknown>,
+  ids: {
+    conversationId?: string | null;
+    toolCallId?: string | null;
+    toolName?: string | null;
+    rawBody?: string;
+  },
+): ParsedVoiceToolRequest | null {
+  if (!looksLikeElevenLabsFlatToolArgs(body)) return null;
+  if (Object.keys(body).some((key) => ELEVEN_META_KEYS.has(key))) return null;
+
+  const conversationId =
+    ids.conversationId ??
+    ids.toolCallId ??
+    (ids.rawBody ? createHash('sha256').update(ids.rawBody).digest('hex').slice(0, 32) : null);
+
+  if (!conversationId) return null;
+
+  return {
+    provider: 'elevenlabs',
+    args: body,
+    clinicId: resolveClinicId(null, body),
+    providerCallId: conversationId,
+    fromNumber: readString(body.from_number) ?? readString(body.phone),
+    language: readString(body.language) ?? 'bs-BA',
+    toolName: ids.toolName ?? undefined,
+  };
+}
+
+export function readElevenLabsIdsFromHeaders(headers: Headers): {
+  conversationId: string | null;
+  toolCallId: string | null;
+  toolName: string | null;
+} {
+  const read = (names: string[]) => {
+    for (const name of names) {
+      const value = headers.get(name);
+      if (value) return value;
+    }
+    return null;
+  };
+
+  return {
+    conversationId: read([
+      'x-conversation-id',
+      'conversation-id',
+      'xi-conversation-id',
+      'x-elevenlabs-conversation-id',
+    ]),
+    toolCallId: read(['x-tool-call-id', 'tool-call-id', 'xi-tool-call-id']),
+    toolName: read(['x-tool-name', 'tool-name']),
+  };
+}
+
 export function parseVoiceToolRequest(body: unknown): ParsedVoiceToolRequest | null {
   if (!body || typeof body !== 'object') return null;
   const payload = body as Record<string, unknown>;
@@ -110,9 +193,18 @@ export function parseVoiceToolRequest(body: unknown): ParsedVoiceToolRequest | n
     };
   }
 
-  if ('parameters' in payload || 'conversation_id' in payload) {
-    const eleven = payload as ElevenLabsToolPayload;
-    const args = (eleven.parameters ?? {}) as Record<string, unknown>;
+  if (
+    'parameters' in payload ||
+    'conversation_id' in payload ||
+    'tool_call_id' in payload ||
+    'tool_name' in payload
+  ) {
+    const eleven = payload as ElevenLabsToolPayload & Record<string, unknown>;
+    const args =
+      eleven.parameters && typeof eleven.parameters === 'object'
+        ? (eleven.parameters as Record<string, unknown>)
+        : Object.fromEntries(Object.entries(eleven).filter(([k]) => !ELEVEN_META_KEYS.has(k)));
+
     const dynamicVars = eleven.dynamic_variables;
     const conversationId =
       readString(eleven.conversation_id) ??
@@ -130,7 +222,7 @@ export function parseVoiceToolRequest(body: unknown): ParsedVoiceToolRequest | n
         readString(args.from_number) ??
         readString(args.phone) ??
         readString(dynamicVars?.from_number),
-      language: readString(args.language) ?? 'en-US',
+      language: readString(args.language) ?? 'bs-BA',
       toolName: readString(eleven.tool_name) ?? undefined,
     };
   }
@@ -145,6 +237,8 @@ export function voiceToolResponse(
     return {
       success: true,
       message: result.message,
+      // ElevenLabs webhook tools require a top-level `result` string/object.
+      result: result.message,
       ...(result.data ? { data: result.data } : {}),
     };
   }
@@ -153,5 +247,6 @@ export function voiceToolResponse(
     error: result.error,
     code: result.code ?? 'error',
     message: result.error,
+    result: result.error,
   };
 }

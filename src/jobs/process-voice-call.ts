@@ -8,15 +8,16 @@ function shouldReconcileIntents() {
   return process.env.VOICE_RECONCILE_INTENTS === 'true';
 }
 
-function resolveLanguage(provider: VoiceEventJobData['provider']) {
-  return provider === 'elevenlabs' ? 'en-US' : 'bs-BA';
+function resolveLanguage(language?: string) {
+  if (language?.toLowerCase().startsWith('en')) return 'en-US';
+  return 'bs-BA';
 }
 
 export async function processVoiceEvent(data: VoiceEventJobData) {
   const now = new Date();
   const phone = data.fromNumber ?? null;
   const patient = phone ? await findPatientByPhone(data.clinicId, phone) : null;
-  const language = resolveLanguage(data.provider);
+  const language = resolveLanguage(data.payload?.language as string | undefined);
   const isEndEvent =
     data.eventType.includes('end') ||
     data.eventType.includes('post_call') ||

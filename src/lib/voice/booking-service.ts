@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, or } from 'drizzle-orm';
+import { and, eq, gte, ilike, inArray, or } from 'drizzle-orm';
 import { db } from '@/db';
 import { appointments, calls, doctors, patients } from '@/db/schema';
 import {
@@ -72,14 +72,33 @@ export async function findOrCreatePatientByPhone(params: {
   return created;
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 async function resolveDoctor(clinicId: string, doctorId?: string) {
   if (doctorId) {
-    const [doctor] = await db
-      .select({ id: doctors.id, fullName: doctors.fullName })
-      .from(doctors)
-      .where(and(eq(doctors.clinicId, clinicId), eq(doctors.id, doctorId), eq(doctors.isActive, true)))
-      .limit(1);
-    return doctor ?? null;
+    if (isUuid(doctorId)) {
+      const [doctor] = await db
+        .select({ id: doctors.id, fullName: doctors.fullName })
+        .from(doctors)
+        .where(and(eq(doctors.clinicId, clinicId), eq(doctors.id, doctorId), eq(doctors.isActive, true)))
+        .limit(1);
+      if (doctor) return doctor;
+    } else {
+      const [doctor] = await db
+        .select({ id: doctors.id, fullName: doctors.fullName })
+        .from(doctors)
+        .where(
+          and(
+            eq(doctors.clinicId, clinicId),
+            ilike(doctors.fullName, `%${doctorId}%`),
+            eq(doctors.isActive, true),
+          ),
+        )
+        .limit(1);
+      if (doctor) return doctor;
+    }
   }
 
   const [doctor] = await db
@@ -114,6 +133,15 @@ async function getUpcomingAppointment(clinicId: string, patientId: string) {
   return upcoming ?? null;
 }
 
+async function withOptionalCallRecord<T>(operation: string, fn: () => Promise<T>): Promise<T | null> {
+  try {
+    return await fn();
+  } catch (error) {
+    console.warn(`[voice] call record skipped (${operation}):`, error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
 export async function upsertCallRecord(ctx: VoiceBookingContext, patch: {
   patientId?: string | null;
   outcome?: string;
@@ -121,44 +149,46 @@ export async function upsertCallRecord(ctx: VoiceBookingContext, patch: {
   appointmentId?: string | null;
   status?: 'in_progress' | 'completed';
 }) {
-  const now = new Date();
-  const [existing] = await db
-    .select({ id: calls.id })
-    .from(calls)
-    .where(eq(calls.providerCallId, ctx.providerCallId))
-    .limit(1);
+  await withOptionalCallRecord('upsert', async () => {
+    const now = new Date();
+    const [existing] = await db
+      .select({ id: calls.id })
+      .from(calls)
+      .where(eq(calls.providerCallId, ctx.providerCallId))
+      .limit(1);
 
-  if (!existing) {
-    await db.insert(calls).values({
-      clinicId: ctx.clinicId,
-      patientId: patch.patientId ?? null,
-      appointmentId: patch.appointmentId ?? null,
-      provider: ctx.provider,
-      providerCallId: ctx.providerCallId,
-      direction: 'inbound',
-      status: patch.status ?? 'in_progress',
-      fromNumber: ctx.fromNumber ?? null,
-      language: ctx.language ?? 'bs-BA',
-      outcome: patch.outcome ?? null,
-      summary: patch.summary ?? null,
-      startedAt: now,
-      endedAt: patch.status === 'completed' ? now : null,
-    });
-    return;
-  }
+    if (!existing) {
+      await db.insert(calls).values({
+        clinicId: ctx.clinicId,
+        patientId: patch.patientId ?? null,
+        appointmentId: patch.appointmentId ?? null,
+        provider: ctx.provider,
+        providerCallId: ctx.providerCallId,
+        direction: 'inbound',
+        status: patch.status ?? 'in_progress',
+        fromNumber: ctx.fromNumber ?? null,
+        language: ctx.language ?? 'bs-BA',
+        outcome: patch.outcome ?? null,
+        summary: patch.summary ?? null,
+        startedAt: now,
+        endedAt: patch.status === 'completed' ? now : null,
+      });
+      return;
+    }
 
-  await db
-    .update(calls)
-    .set({
-      patientId: patch.patientId ?? undefined,
-      appointmentId: patch.appointmentId ?? undefined,
-      outcome: patch.outcome ?? undefined,
-      summary: patch.summary ?? undefined,
-      status: patch.status ?? undefined,
-      updatedAt: now,
-      ...(patch.status === 'completed' ? { endedAt: now } : {}),
-    })
-    .where(eq(calls.id, existing.id));
+    await db
+      .update(calls)
+      .set({
+        patientId: patch.patientId ?? undefined,
+        appointmentId: patch.appointmentId ?? undefined,
+        outcome: patch.outcome ?? undefined,
+        summary: patch.summary ?? undefined,
+        status: patch.status ?? undefined,
+        updatedAt: now,
+        ...(patch.status === 'completed' ? { endedAt: now } : {}),
+      })
+      .where(eq(calls.id, existing.id));
+  });
 }
 
 export async function checkVoiceAvailability(params: {
@@ -214,16 +244,19 @@ export async function bookVoiceAppointment(params: {
   }>
 > {
   if (params.idempotencyKey) {
-    const [existingCall] = await db
-      .select({ appointmentId: calls.appointmentId, outcome: calls.outcome })
-      .from(calls)
-      .where(
-        and(
-          eq(calls.providerCallId, params.ctx.providerCallId),
-          eq(calls.outcome, 'booked'),
-        ),
-      )
-      .limit(1);
+    const existingCall = await withOptionalCallRecord('idempotency', async () => {
+      const [row] = await db
+        .select({ appointmentId: calls.appointmentId, outcome: calls.outcome })
+        .from(calls)
+        .where(
+          and(
+            eq(calls.providerCallId, params.ctx.providerCallId),
+            eq(calls.outcome, 'booked'),
+          ),
+        )
+        .limit(1);
+      return row ?? null;
+    });
 
     if (existingCall?.appointmentId) {
       const [appt] = await db

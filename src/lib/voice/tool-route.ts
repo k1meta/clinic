@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getClinicSettings } from '@/db/queries/clinics';
 import { verifyRetellSignature } from '@/lib/channels/voice/retell';
 import {
+  parseElevenLabsFlatToolBody,
   parseVoiceToolRequest,
+  readElevenLabsIdsFromHeaders,
   verifyElevenLabsSignature,
   verifyVoiceToolsBearer,
   voiceToolResponse,
@@ -34,7 +36,14 @@ export async function parseAuthorizedVoiceToolRequest(request: NextRequest) {
     return { error: NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 }) };
   }
 
-  const parsed = parseVoiceToolRequest(body);
+  const elevenHeaders = readElevenLabsIdsFromHeaders(request.headers);
+  let parsed = parseVoiceToolRequest(body);
+  if (!parsed && body && typeof body === 'object') {
+    parsed = parseElevenLabsFlatToolBody(body as Record<string, unknown>, {
+      ...elevenHeaders,
+      rawBody: raw,
+    });
+  }
   if (!parsed) {
     return { error: NextResponse.json({ error: 'Unrecognized tool payload' }, { status: 400 }) };
   }

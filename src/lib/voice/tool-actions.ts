@@ -30,8 +30,21 @@ export function buildVoiceContext(parsed: ParsedVoiceToolRequest): VoiceBookingC
   };
 }
 
+function resolveCallerPhone(parsed: ParsedVoiceToolRequest): string | null {
+  const explicit = readString(parsed.args.phone) ?? parsed.fromNumber;
+  if (explicit) return explicit;
+
+  // ElevenLabs web calls have no PSTN caller ID — stable per-conversation id for dev/testing.
+  if (parsed.provider === 'elevenlabs' && parsed.providerCallId) {
+    const slug = parsed.providerCallId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 40);
+    return slug ? `web-${slug}` : null;
+  }
+
+  return null;
+}
+
 export async function resolveToolPatient(parsed: ParsedVoiceToolRequest, options?: { allowCreate?: boolean }) {
-  const phone = readString(parsed.args.phone) ?? parsed.fromNumber;
+  const phone = resolveCallerPhone(parsed);
   if (!phone) return null;
 
   if (options?.allowCreate) {
@@ -50,7 +63,11 @@ export function readToolDate(parsed: ParsedVoiceToolRequest) {
 }
 
 export function readToolTime(parsed: ParsedVoiceToolRequest) {
-  return readString(parsed.args.time);
+  const raw = readString(parsed.args.time);
+  if (!raw) return undefined;
+  const match = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return raw;
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
 }
 
 export function readToolDuration(parsed: ParsedVoiceToolRequest) {

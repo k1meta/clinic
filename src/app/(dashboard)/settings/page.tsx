@@ -16,6 +16,7 @@ import RunReminderScanButton from '@/components/RunReminderScanButton';
 import GoogleReviewUrlForm from '@/components/GoogleReviewUrlForm';
 import TeamPanel from '@/components/TeamPanel';
 import ChangeOwnPasswordForm from '@/components/ChangeOwnPasswordForm';
+import VerticalSettingsForm from '@/components/VerticalSettingsForm';
 import { redirect } from 'next/navigation';
 
 function formatHour(h: number) {
@@ -70,6 +71,24 @@ export default async function SettingsPage() {
             </div>
           </div>
           <WorkHoursForm currentStart={settings.workHours.start} currentEnd={settings.workHours.end} />
+        </div>
+      </div>
+
+      {/* Business vertical */}
+      <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden mb-8">
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center text-secondary">
+              <span className="material-symbols-outlined">storefront</span>
+            </div>
+            <div>
+              <h2 className="font-headline font-bold text-lg text-on-surface">Business type</h2>
+              <p className="text-[11px] text-slate-400">
+                Tailors automation copy and UI labels for your industry (clinic, salon, vet, etc.).
+              </p>
+            </div>
+          </div>
+          <VerticalSettingsForm vertical={settings.vertical} />
         </div>
       </div>
 

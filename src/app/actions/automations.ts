@@ -38,7 +38,7 @@ export async function toggleAutomation(automationId: string) {
     .set({ isEnabled: !auto.isEnabled, updatedAt: new Date() })
     .where(and(eq(automations.id, automationId), eq(automations.clinicId, clinicId)));
 
-  revalidatePath('/voice-ai');
+  revalidatePath('/automations');
   revalidatePath('/settings');
   return { success: true };
 }
@@ -51,7 +51,21 @@ export async function updateAutomationTemplate(automationId: string, templateCon
     .set({ templateContent, updatedAt: new Date() })
     .where(and(eq(automations.id, automationId), eq(automations.clinicId, clinicId)));
 
-  revalidatePath('/voice-ai');
+  revalidatePath('/automations');
+  return { success: true };
+}
+
+export async function updateAutomationChannel(automationId: string, channel: string) {
+  const { clinicId } = await requireAdmin();
+  const allowed = ['whatsapp', 'sms', 'email', 'whatsapp,sms', 'sms,email', 'whatsapp,sms,email'];
+  if (!allowed.includes(channel)) return { error: 'Invalid channel' };
+
+  await db
+    .update(automations)
+    .set({ channel, updatedAt: new Date() })
+    .where(and(eq(automations.id, automationId), eq(automations.clinicId, clinicId)));
+
+  revalidatePath('/automations');
   return { success: true };
 }
 
@@ -63,6 +77,6 @@ export async function updateQuietHours(automationId: string, start: number, end:
     .set({ quietHoursStart: start, quietHoursEnd: end, updatedAt: new Date() })
     .where(and(eq(automations.id, automationId), eq(automations.clinicId, clinicId)));
 
-  revalidatePath('/voice-ai');
+  revalidatePath('/automations');
   return { success: true };
 }

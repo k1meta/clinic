@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { db } from '..';
 import { clinics } from '../schema';
+import type { BusinessVertical } from '@/lib/verticals';
+import { isBusinessVertical } from '@/lib/verticals';
 
 export type ClinicSettings = {
   workHours: { start: number; end: number };
@@ -9,6 +11,7 @@ export type ClinicSettings = {
   testPhoneNumber: string;
   /** Google Maps / Business Profile review link for first-visit WhatsApp prompts. */
   googleReviewUrl: string;
+  vertical: BusinessVertical;
 };
 
 const DEFAULT_SETTINGS: ClinicSettings = {
@@ -17,6 +20,7 @@ const DEFAULT_SETTINGS: ClinicSettings = {
   aiCalls: false,
   testPhoneNumber: '',
   googleReviewUrl: '',
+  vertical: 'dental',
 };
 
 export async function getClinicSettings(clinicId: string): Promise<ClinicSettings> {
@@ -42,5 +46,6 @@ export async function getClinicSettings(clinicId: string): Promise<ClinicSetting
     aiCalls: typeof raw.aiCalls === 'boolean' ? raw.aiCalls : DEFAULT_SETTINGS.aiCalls,
     testPhoneNumber: typeof raw.testPhoneNumber === 'string' ? raw.testPhoneNumber : DEFAULT_SETTINGS.testPhoneNumber,
     googleReviewUrl: typeof raw.googleReviewUrl === 'string' ? raw.googleReviewUrl : DEFAULT_SETTINGS.googleReviewUrl,
+    vertical: isBusinessVertical(raw.vertical as string) ? (raw.vertical as BusinessVertical) : DEFAULT_SETTINGS.vertical,
   };
 }

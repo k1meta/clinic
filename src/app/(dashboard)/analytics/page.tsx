@@ -7,6 +7,7 @@ import {
   getWeeklyOccupancy,
   getMonthlyRevenue,
 } from '@/db/queries/appointments';
+import { getEngagementMetrics } from '@/db/queries/engagement-analytics';
 import MetricCard from '@/components/MetricCard';
 import { redirect } from 'next/navigation';
 
@@ -20,11 +21,12 @@ export default async function AnalyticsPage() {
 
   const clinicId = admin.clinicId;
 
-  const [todayCount, noShowRate, weeklyOccupancy, monthlyRevenue] = await Promise.all([
+  const [todayCount, noShowRate, weeklyOccupancy, monthlyRevenue, engagement] = await Promise.all([
     getTodayAppointmentCount(clinicId),
     getNoShowRate(clinicId),
     getWeeklyOccupancy(clinicId),
     getMonthlyRevenue(clinicId),
+    getEngagementMetrics(clinicId),
   ]);
 
   return (
@@ -94,6 +96,44 @@ export default async function AnalyticsPage() {
             sub="Scheduled for today"
             subColor="text-slate-400"
             subIcon="today"
+          />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="font-headline font-bold text-sm uppercase tracking-widest text-slate-400">
+          Engagement (30d)
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <MetricCard
+            icon="send"
+            iconBg="bg-primary/10"
+            iconColor="text-primary"
+            label="Messages sent"
+            value={String(engagement.messagesSent30d)}
+            sub={`${engagement.messagesFailed30d} failed`}
+            subColor={engagement.messagesFailed30d > 0 ? 'text-amber-600' : 'text-green-600'}
+            subIcon="mark_email_read"
+          />
+          <MetricCard
+            icon="rate_review"
+            iconBg="bg-amber-500/10"
+            iconColor="text-amber-600"
+            label="Review requests"
+            value={String(engagement.reviewRequests30d)}
+            sub={`${engagement.totalReviews} total reviews · ${engagement.avgReviewRating} avg`}
+            subColor="text-slate-400"
+            subIcon="star"
+          />
+          <MetricCard
+            icon="campaign"
+            iconBg="bg-green-100"
+            iconColor="text-green-600"
+            label="Campaign messages"
+            value={String(engagement.campaignMessages30d)}
+            sub={`${engagement.reEngagement30d} re-engagement sends`}
+            subColor="text-slate-400"
+            subIcon="autorenew"
           />
         </div>
       </section>

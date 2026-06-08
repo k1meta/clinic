@@ -8,6 +8,7 @@ import {
   getEventType,
   getFromNumber,
   getToNumber,
+  getRetellSummary,
   getTranscript,
   parseRetellPayload,
   verifyRetellSignature,
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
     toNumber: getToNumber(payload) ?? undefined,
     direction: getDirection(payload),
     transcript: getTranscript(payload) || undefined,
+    summary: getRetellSummary(payload) || undefined,
     payload: payload as Record<string, unknown>,
     reconcileOnly: true,
   });

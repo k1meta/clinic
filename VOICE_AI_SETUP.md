@@ -183,3 +183,38 @@ Enable legacy transcript intent fallback only with:
 ```env
 VOICE_RECONCILE_INTENTS=true
 ```
+
+## Call transcripts in the dashboard
+
+Post-call webhooks store transcripts on the `calls` table. View them at **`/voice-ai`** (call list + chat-style viewer) or **`/voice-ai/calls/[id]`** for a single call.
+
+### Transcript pipeline checklist
+
+If test calls show transcripts in ElevenLabs but not in ClinicOS:
+
+1. **`npm run worker`** must be running (jobs queue in Redis until processed).
+2. **Settings → AI Calls** must be **ON** (webhook returns early when off).
+3. **ElevenLabs post-call webhook** must hit your public URL:
+   - `POST https://YOUR_DOMAIN/api/voice/elevenlabs/webhook`
+   - Configure in agent settings (`config/voice/elevenlabs-en-agent.json` → `webhooks.post_call`).
+4. **`DEFAULT_CLINIC_ID`** must be set if the agent does not pass `clinicId` dynamic variable.
+5. **`ELEVENLABS_WEBHOOK_SECRET`** must match the secret in ElevenLabs (or leave unset in dev to skip verification).
+6. Use **ngrok** (`npm run tunnel`) for local dev so ElevenLabs can reach your machine.
+
+### Verify in database
+
+```sql
+SELECT provider, provider_call_id, left(transcript, 80) AS transcript_preview, summary, created_at
+FROM calls
+ORDER BY created_at DESC
+LIMIT 5;
+```
+
+### What gets stored
+
+| Field | Source |
+|-------|--------|
+| `calls.transcript` | Flat text (`role: message` per line) |
+| `calls.summary` | ElevenLabs `analysis.transcript_summary` or Retell `call_analysis` |
+| `calls.metadata.transcriptTurns` | Structured turns for chat UI (ElevenLabs) |
+| `calls.metadata` | Full webhook payload (debugging) |

@@ -1,3 +1,9 @@
+export type TranscriptTurn = {
+  role?: string;
+  message?: string;
+  text?: string;
+};
+
 export type ElevenLabsPostCallPayload = {
   type?: string;
   event?: string;
@@ -5,7 +11,7 @@ export type ElevenLabsPostCallPayload = {
     conversation_id?: string;
     agent_id?: string;
     status?: string;
-    transcript?: Array<{ role?: string; message?: string; text?: string }>;
+    transcript?: TranscriptTurn[];
     analysis?: {
       transcript_summary?: string;
       call_successful?: string;
@@ -51,10 +57,41 @@ export function getElevenLabsToNumber(payload: ElevenLabsPostCallPayload): strin
   return typeof phone === 'string' && phone.length > 0 ? phone : null;
 }
 
+export function getElevenLabsTranscriptTurns(payload: ElevenLabsPostCallPayload): TranscriptTurn[] {
+  const data = payload.data as Record<string, unknown> | undefined;
+  const direct = payload.data?.transcript;
+  if (Array.isArray(direct) && direct.length > 0) return direct;
+
+  const nested = data?.conversation_transcript ?? data?.transcription;
+  if (Array.isArray(nested)) return nested as TranscriptTurn[];
+
+  return [];
+}
+
+export function getElevenLabsSummary(payload: ElevenLabsPostCallPayload): string {
+  const summary = payload.data?.analysis?.transcript_summary;
+  if (typeof summary === 'string' && summary.trim()) return summary.trim();
+
+  const data = payload.data as Record<string, unknown> | undefined;
+  const alt = data?.summary ?? data?.call_summary;
+  return typeof alt === 'string' ? alt.trim() : '';
+}
+
+export function isElevenLabsPostCallEvent(payload: ElevenLabsPostCallPayload): boolean {
+  const eventType = getElevenLabsEventType(payload).toLowerCase();
+  return (
+    eventType.includes('post_call') ||
+    eventType.includes('transcription') ||
+    eventType.includes('conversation_end') ||
+    eventType.includes('call_end') ||
+    payload.data?.status === 'done'
+  );
+}
+
 export function getElevenLabsTranscript(payload: ElevenLabsPostCallPayload): string {
-  const turns = payload.data?.transcript;
-  if (!Array.isArray(turns) || turns.length === 0) {
-    return payload.data?.analysis?.transcript_summary ?? '';
+  const turns = getElevenLabsTranscriptTurns(payload);
+  if (turns.length === 0) {
+    return getElevenLabsSummary(payload);
   }
 
   return turns

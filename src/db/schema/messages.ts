@@ -7,7 +7,7 @@ export const messageChannelEnum = pgEnum('message_channel', ['whatsapp', 'sms', 
 export const messageDirectionEnum = pgEnum('message_direction', ['outbound', 'inbound']);
 export const messageTypeEnum = pgEnum('message_type', [
   'reminder_48h', 'reminder_2h', 'post_visit', 're_engagement', 'review_request',
-  'confirmation', 'cancellation', 'reschedule', 'freetext', 'system',
+  'confirmation', 'cancellation', 'reschedule', 'freetext', 'system', 'campaign',
 ]);
 export const messageStatusEnum = pgEnum('message_status', [
   'queued', 'sent', 'delivered', 'read', 'failed',

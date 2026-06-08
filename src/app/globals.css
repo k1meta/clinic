@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
-@theme inline {
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Use @theme (not inline) so utilities reference var(--color-*) and .dark overrides work */
+@theme {
   --color-surface-container-low: #f2f4f6;
   --color-surface: #f7f9fb;
   --color-on-tertiary-fixed-variant: #7d2d00;
@@ -54,6 +57,56 @@
   --font-label: "Inter", sans-serif;
 }
 
+/* MD3-inspired dark palette — overrides @theme tokens when html has .dark */
+.dark {
+  --color-surface-container-low: #2d3133;
+  --color-surface: #1a1c1e;
+  --color-surface-container-high: #3a3f42;
+  --color-surface-container-highest: #45494c;
+  --color-surface-container-lowest: #242729;
+  --color-on-surface-variant: #c3c6d7;
+  --color-on-surface: #e2e2e5;
+  --color-surface-variant: #434655;
+  --color-surface-container: #2d3133;
+  --color-inverse-surface: #e2e2e5;
+  --color-surface-bright: #383b3e;
+  --color-surface-dim: #1a1c1e;
+  --color-background: #1a1c1e;
+  --color-on-background: #e2e2e5;
+  --color-inverse-on-surface: #2d3133;
+  --color-outline: #8d9099;
+  --color-outline-variant: #434655;
+  --color-on-primary-container: #dbe1ff;
+  --color-primary-fixed: #00174b;
+  --color-on-primary-fixed: #dbe1ff;
+  --color-on-primary-fixed-variant: #b4c5ff;
+  --color-secondary-fixed: #00174b;
+  --color-on-secondary-fixed: #dbe1ff;
+  --color-on-secondary-fixed-variant: #b4c5ff;
+  --color-secondary-container: #31447b;
+  --color-on-secondary-container: #dbe1ff;
+  --color-error-container: #93000a;
+  --color-on-error-container: #ffdad6;
+  --color-on-tertiary-container: #ffdbcd;
+  --color-on-tertiary-fixed: #ffdbcd;
+  --color-on-tertiary-fixed-variant: #ffb596;
+  --color-tertiary-fixed: #5c1900;
+  --color-tertiary-fixed-dim: #943700;
+  --color-primary: #6b9fff;
+  --color-primary-container: #004ac6;
+  --color-inverse-primary: #0053db;
+  --color-secondary: #b4c5ff;
+  --color-on-secondary: #00174b;
+  --color-tertiary: #ffb596;
+  --color-tertiary-container: #bc4800;
+  --color-on-tertiary: #360f00;
+  --color-error: #ffb4ab;
+  --color-on-error: #690005;
+  --color-surface-tint: #6b9fff;
+  --color-primary-fixed-dim: #004ac6;
+  --color-secondary-fixed-dim: #31447b;
+}
+
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
   vertical-align: middle;
@@ -73,9 +126,18 @@
   backdrop-filter: blur(24px);
 }
 
+.dark .glass-card {
+  background: rgba(36, 39, 41, 0.85);
+}
+
 .ai-spark-border {
   border: 1px solid rgba(188, 72, 0, 0.15);
   box-shadow: 0 4px 12px rgba(188, 72, 0, 0.05);
+}
+
+.dark .ai-spark-border {
+  border: 1px solid rgba(255, 181, 150, 0.2);
+  box-shadow: 0 4px 12px rgba(188, 72, 0, 0.12);
 }
 
 .no-scrollbar::-webkit-scrollbar {

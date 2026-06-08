@@ -12,6 +12,8 @@ export type RetellVoiceWebhookPayload = {
     start_timestamp?: number;
     end_timestamp?: number;
     duration_ms?: number;
+    transcript?: string;
+    call_analysis?: { call_summary?: string };
     metadata?: Record<string, unknown>;
   };
   from_number?: string;
@@ -74,8 +76,25 @@ export function getClinicIdFromPayload(payload: RetellVoiceWebhookPayload): stri
 }
 
 export function getTranscript(payload: RetellVoiceWebhookPayload): string {
-  if (typeof payload.transcript === 'string') return payload.transcript;
+  if (typeof payload.transcript === 'string' && payload.transcript.trim()) {
+    return payload.transcript;
+  }
+  const callTranscript = payload.call?.transcript;
+  if (typeof callTranscript === 'string' && callTranscript.trim()) {
+    return callTranscript;
+  }
   const nested = payload.payload as Record<string, unknown> | undefined;
   if (nested && typeof nested.transcript === 'string') return nested.transcript;
+  return '';
+}
+
+export function getRetellSummary(payload: RetellVoiceWebhookPayload): string {
+  if (typeof payload.summary === 'string' && payload.summary.trim()) {
+    return payload.summary.trim();
+  }
+  const callSummary = payload.call?.call_analysis?.call_summary;
+  if (typeof callSummary === 'string' && callSummary.trim()) {
+    return callSummary.trim();
+  }
   return '';
 }

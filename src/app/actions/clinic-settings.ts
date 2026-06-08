@@ -3,9 +3,13 @@
 import { z } from 'zod';
 import { db } from '@/db';
 import { clinics } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { requireAdmin } from '@/db/queries/auth';
 import { revalidatePath } from 'next/cache';
+import { automations } from '@/db/schema';
+import type { BusinessVertical } from '@/lib/verticals';
+import { isBusinessVertical, VERTICAL_TEMPLATE_PACKS } from '@/lib/verticals';
+import type { AutomationTypeName } from '@/db/schema/automations';
 
 const workHoursSchema = z.object({
   start: z.number().int().min(0).max(23),
@@ -114,7 +118,31 @@ export async function runReminderScanNow() {
   }
 }
 
-export async function sendTestMessage(input: { channel: 'whatsapp' | 'sms' }) {
+export async function updateBusinessVertical(vertical: BusinessVertical) {
+  const { clinicId } = await requireAdmin();
+  if (!isBusinessVertical(vertical)) return { error: 'Invalid vertical' };
+
+  await writeClinicSettings(clinicId, { vertical });
+
+  const pack = VERTICAL_TEMPLATE_PACKS[vertical];
+  for (const [type, templateContent] of Object.entries(pack)) {
+    await db
+      .update(automations)
+      .set({ templateContent, updatedAt: new Date() })
+      .where(
+        and(
+          eq(automations.clinicId, clinicId),
+          eq(automations.type, type as AutomationTypeName),
+        ),
+      );
+  }
+
+  revalidatePath('/settings');
+  revalidatePath('/automations');
+  return { success: true };
+}
+
+export async function sendTestMessage(input: { channel: 'whatsapp' | 'sms' | 'email'; email?: string }) {
   const { clinicId } = await requireAdmin();
   const current = await readClinicSettings(clinicId);
   const phone = current.testPhoneNumber as string | undefined;
@@ -127,11 +155,20 @@ export async function sendTestMessage(input: { channel: 'whatsapp' | 'sms' }) {
       const { sendTextMessage } = await import('@/lib/channels/whatsapp');
       const result = await sendTextMessage(phone, testContent);
       return { success: true, externalId: result.externalId, message: 'WhatsApp message sent to ' + phone };
-    } else {
+    }
+    if (input.channel === 'sms') {
       const { sendSms } = await import('@/lib/channels/sms');
       const result = await sendSms(phone, testContent);
       return { success: true, externalId: result.externalId, message: 'SMS sent to ' + phone };
     }
+    if (!input.email) return { error: 'Email address required for email test' };
+    const { sendEmail } = await import('@/lib/channels/email');
+    const result = await sendEmail({
+      to: input.email,
+      subject: 'ClinicOS test email',
+      body: testContent,
+    });
+    return { success: true, externalId: result.externalId, message: 'Email sent to ' + input.email };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     return { error: 'Send failed: ' + msg };

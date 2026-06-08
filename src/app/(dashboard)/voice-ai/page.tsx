@@ -3,20 +3,14 @@
 import { getClinicId } from '@/db/queries/auth';
 import { getClinicSettings } from '@/db/queries/clinics';
 import { getCallStatsThisWeek, getRecentCallsByClinic } from '@/db/queries/calls';
-
-function formatDuration(durationSec: number | null) {
-  if (!durationSec || durationSec <= 0) return '--';
-  const min = Math.floor(durationSec / 60);
-  const sec = durationSec % 60;
-  return `${min}:${String(sec).padStart(2, '0')}`;
-}
+import CallTranscriptPanel from '@/components/CallTranscriptPanel';
 
 export default async function VoiceAIPage() {
   const clinicId = await getClinicId();
   const [settings, stats, recent] = await Promise.all([
     getClinicSettings(clinicId),
     getCallStatsThisWeek(clinicId),
-    getRecentCallsByClinic(clinicId, 12),
+    getRecentCallsByClinic(clinicId, 20),
   ]);
 
   return (
@@ -75,52 +69,17 @@ export default async function VoiceAIPage() {
         </div>
 
         <div className="col-span-12 lg:col-span-4 glass-card p-6 rounded-xl ai-spark-border flex flex-col shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-headline font-bold text-on-surface">Latest Transcript</h3>
-          </div>
-          {recent[0]?.transcript ? (
-            <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap max-h-80 overflow-y-auto no-scrollbar">{recent[0].transcript}</p>
-          ) : (
-            <div className="flex-1 flex items-center justify-center py-12 text-center">
-              <div>
-                <span className="material-symbols-outlined text-4xl text-slate-300 mb-3">call_end</span>
-                <p className="text-sm text-slate-400">No transcripts yet</p>
-              </div>
-            </div>
-          )}
+          <h3 className="font-headline font-bold text-on-surface mb-3">Transcripts</h3>
+          <p className="text-sm text-slate-500 leading-relaxed">
+            Select any call below to read the full conversation. ElevenLabs and Retell post-call webhooks
+            populate transcripts automatically when the worker is running.
+          </p>
+          <p className="text-xs text-slate-400 mt-4">
+            {recent.filter((c) => c.transcript?.trim()).length} of {recent.length} recent calls have transcripts.
+          </p>
         </div>
 
-        <div className="col-span-12 bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-surface-container-low">
-            <h3 className="font-headline font-bold text-on-surface">Recent Call Log</h3>
-          </div>
-          {recent.length === 0 ? (
-            <div className="px-6 py-12 text-center">
-              <span className="material-symbols-outlined text-4xl text-slate-300 mb-3">phone_in_talk</span>
-              <p className="text-sm text-slate-400">No calls recorded yet</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-surface-container-low">
-              {recent.map((call) => (
-                <div key={call.id} className="px-6 py-4 flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-on-surface">
-                      {call.patient?.fullName ?? call.fromNumber ?? 'Unknown caller'}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {call.provider} • {call.outcome ?? 'no_outcome'} • {call.status} • {call.direction}
-                      {call.startedAt ? ` • ${new Date(call.startedAt).toLocaleString('bs-BA')}` : ''}
-                    </p>
-                    {call.summary && <p className="text-xs text-slate-600 mt-2">{call.summary}</p>}
-                  </div>
-                  <span className="text-xs font-bold text-slate-500 bg-surface-container-low px-2 py-1 rounded shrink-0">
-                    {formatDuration(call.durationSec ?? null)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <CallTranscriptPanel calls={recent} />
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { getClinicContext } from "@/db/queries/auth";
+import { getLabelsForClinic } from "@/lib/labels";
 import { getPatientsByClinic, getPatientCount, getNewPatientCountThisMonth } from "@/db/queries/patients";
 import { getAppointmentsByPatientIds } from "@/db/queries/appointments";
 import PatientSearch from "@/components/PatientSearch";
@@ -20,10 +21,11 @@ export default async function PatientsPage({
   const status = params.status ?? "";
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
 
-  const [data, totalPatients, newThisMonth] = await Promise.all([
+  const [data, totalPatients, newThisMonth, labels] = await Promise.all([
     getPatientsByClinic(clinicId, { search, status, page, limit: 20 }),
     getPatientCount(clinicId),
     getNewPatientCountThisMonth(clinicId),
+    getLabelsForClinic(clinicId),
   ]);
 
   // Fetch treatment history for all displayed patients
@@ -77,12 +79,12 @@ export default async function PatientsPage({
             <span>/</span>
             <span className="text-primary">Database</span>
           </nav>
-          <h1 className="font-headline text-3xl font-extrabold tracking-tight text-on-surface">Patients</h1>
+          <h1 className="font-headline text-3xl font-extrabold tracking-tight text-on-surface">{labels.customers}</h1>
         </div>
         <div className="flex items-center gap-6">
           <div className="flex gap-4">
             <div className="px-5 py-3 bg-white border border-outline-variant/10 rounded-xl shadow-sm">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Total Patients</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Total {labels.customers}</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-headline font-extrabold">{totalPatients.toLocaleString()}</span>
               </div>

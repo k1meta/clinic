@@ -13,6 +13,22 @@ function resolveLanguage(language?: string) {
   return 'bs-BA';
 }
 
+function mergeMetadata(
+  existing: Record<string, unknown> | null | undefined,
+  payload: Record<string, unknown>,
+  transcriptTurns?: VoiceEventJobData['transcriptTurns'],
+): Record<string, unknown> {
+  const base = existing && typeof existing === 'object' ? { ...existing } : {};
+  return {
+    ...base,
+    ...payload,
+    ...(transcriptTurns && transcriptTurns.length > 0 ? { transcriptTurns } : {}),
+  };
+}
+
+const DEFAULT_LOGGED_SUMMARY =
+  'Poziv zabiljezen. Zakazivanje ide preko live tool poziva tokom razgovora.';
+
 export async function processVoiceEvent(data: VoiceEventJobData) {
   const now = new Date();
   const phone = data.fromNumber ?? null;
@@ -27,10 +43,32 @@ export async function processVoiceEvent(data: VoiceEventJobData) {
       (data.payload.data as { status?: string }).status === 'done');
 
   const [existingCall] = await db
-    .select({ id: calls.id, outcome: calls.outcome })
+    .select({
+      id: calls.id,
+      outcome: calls.outcome,
+      transcript: calls.transcript,
+      summary: calls.summary,
+      metadata: calls.metadata,
+    })
     .from(calls)
     .where(eq(calls.providerCallId, data.providerCallId))
     .limit(1);
+
+  const mergedTranscript =
+    data.transcript && data.transcript.trim()
+      ? data.transcript
+      : existingCall?.transcript ?? null;
+
+  const mergedSummary =
+    data.summary && data.summary.trim()
+      ? data.summary
+      : existingCall?.summary ?? null;
+
+  const mergedMetadata = mergeMetadata(
+    existingCall?.metadata as Record<string, unknown> | null | undefined,
+    data.payload,
+    data.transcriptTurns,
+  );
 
   if (!existingCall) {
     await db.insert(calls).values({
@@ -42,9 +80,10 @@ export async function processVoiceEvent(data: VoiceEventJobData) {
       status: isEndEvent ? 'completed' : 'in_progress',
       fromNumber: data.fromNumber ?? null,
       toNumber: data.toNumber ?? null,
-      transcript: data.transcript ?? null,
+      transcript: mergedTranscript,
+      summary: mergedSummary,
       language,
-      metadata: data.payload,
+      metadata: mergedMetadata,
       durationSec: data.durationSec ?? null,
       startedAt: now,
       endedAt: isEndEvent ? now : null,
@@ -54,9 +93,10 @@ export async function processVoiceEvent(data: VoiceEventJobData) {
       .update(calls)
       .set({
         patientId: patient?.id ?? null,
-        transcript: data.transcript || undefined,
+        transcript: mergedTranscript ?? undefined,
+        summary: mergedSummary ?? undefined,
         status: isEndEvent ? 'completed' : 'in_progress',
-        metadata: data.payload,
+        metadata: mergedMetadata,
         durationSec: data.durationSec ?? undefined,
         updatedAt: now,
         ...(isEndEvent ? { endedAt: now } : {}),
@@ -78,14 +118,13 @@ export async function processVoiceEvent(data: VoiceEventJobData) {
           patientId: patient?.id ?? null,
           status: 'completed',
           outcome: 'logged',
-          summary: 'Poziv zabiljezen. Zakazivanje ide preko live tool poziva tokom razgovora.',
+          summary: mergedSummary ?? DEFAULT_LOGGED_SUMMARY,
         },
       );
     }
     return;
   }
 
-  // Optional legacy fallback — disabled by default.
   const [last] = await db
     .select({ id: calls.id, outcome: calls.outcome })
     .from(calls)

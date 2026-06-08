@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { signInAndVerify } from '@/app/actions/auth';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const LAST_LOGIN_EMAIL_KEY = 'lastLoginEmail';
 
@@ -92,6 +93,9 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen bg-surface relative overflow-hidden">
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-primary/5 rounded-full blur-3xl -z-10 pointer-events-none" />
 
       <div className={`flex flex-1 ${showProfilesPanel ? 'flex-col lg:flex-row' : 'items-center justify-center'}`}>

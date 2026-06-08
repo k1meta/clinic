@@ -4,8 +4,9 @@ config({ path: '.env.local' });
 import { Worker } from 'bullmq';
 import { getWorkerConnection } from '@/lib/redis';
 import { getSchedulerQueue } from '@/lib/queue';
-import type { SendMessageJobData, ProcessReplyJobData, VoiceEventJobData } from '@/lib/queue';
+import type { SendMessageJobData, ProcessReplyJobData, VoiceEventJobData, SendCampaignJobData } from '@/lib/queue';
 import { processSendMessage } from '@/jobs/send-message';
+import { processSendCampaign } from '@/jobs/send-campaign';
 import { processButtonReply } from '@/jobs/process-reply';
 import { scan48hReminders, scan2hReminders, scanPostVisit, scanReEngagement } from '@/jobs/scan-reminders';
 import { processVoiceEvent } from '@/jobs/process-voice-call';
@@ -22,6 +23,8 @@ async function main() {
 
       if (job.name === 'send-message') {
         await processSendMessage(job.data as SendMessageJobData);
+      } else if (job.name === 'send-campaign') {
+        await processSendCampaign(job.data as SendCampaignJobData);
       } else if (job.name === 'process-reply') {
         await processButtonReply(job.data as ProcessReplyJobData);
       }

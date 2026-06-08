@@ -3,10 +3,12 @@ import { messages, automations } from '@/db/schema';
 import { patients } from '@/db/schema';
 import type { AutomationTypeName } from '@/db/schema/automations';
 import { eq, and } from 'drizzle-orm';
-import { sendTemplateMessage, sendInteractiveButtons, sendTextMessage } from './channels/whatsapp';
+import { sendTextMessage } from './channels/whatsapp';
 import { sendSms } from './channels/sms';
+import { sendEmail } from './channels/email';
 import { renderTemplate, DEFAULT_TEMPLATES } from './templates';
 import type { TemplateVars } from './templates';
+import { parseChannelCascade, type OutboundChannel } from './channel-cascade';
 
 export type MessageType =
   | 'reminder_48h'
@@ -18,16 +20,19 @@ export type MessageType =
   | 'cancellation'
   | 'reschedule'
   | 'freetext'
-  | 'system';
+  | 'system'
+  | 'campaign';
 
 export interface SendParams {
   clinicId: string;
   patientId: string;
   appointmentId?: string;
-  channel: 'whatsapp' | 'sms';
+  channel: OutboundChannel;
   type: MessageType;
   content: string;
   metadata?: Record<string, unknown>;
+  emailSubject?: string;
+  skipAutomationChecks?: boolean;
 }
 
 /** Check if patient has opted out. */
@@ -53,7 +58,6 @@ async function isQuietHours(clinicId: string, type: string): Promise<boolean> {
   const now = new Date();
   const hour = now.getHours();
   if (auto.quietHoursStart > auto.quietHoursEnd) {
-    // e.g. 21-8: quiet from 21:00 to 08:00
     return hour >= auto.quietHoursStart || hour < auto.quietHoursEnd;
   }
   return hour >= auto.quietHoursStart && hour < auto.quietHoursEnd;
@@ -67,6 +71,15 @@ async function isAutomationEnabled(clinicId: string, type: string): Promise<bool
     .where(and(eq(automations.clinicId, clinicId), eq(automations.type, type as AutomationTypeName)))
     .limit(1);
   return auto?.isEnabled ?? false;
+}
+
+export async function getAutomationChannel(clinicId: string, type: string): Promise<string> {
+  const [auto] = await db
+    .select({ channel: automations.channel })
+    .from(automations)
+    .where(and(eq(automations.clinicId, clinicId), eq(automations.type, type as AutomationTypeName)))
+    .limit(1);
+  return auto?.channel ?? 'whatsapp';
 }
 
 function formatSendError(error: unknown): string {
@@ -83,16 +96,39 @@ function formatSendError(error: unknown): string {
   return raw;
 }
 
+async function dispatchToChannel(
+  channel: OutboundChannel,
+  patient: { phone: string | null; email: string | null },
+  content: string,
+  emailSubject?: string,
+): Promise<string> {
+  if (channel === 'whatsapp') {
+    if (!patient.phone) throw new Error('Patient has no phone number for WhatsApp');
+    const result = await sendTextMessage(patient.phone, content);
+    return result.externalId;
+  }
+  if (channel === 'sms') {
+    if (!patient.phone) throw new Error('Patient has no phone number for SMS');
+    const result = await sendSms(patient.phone, content);
+    return result.externalId;
+  }
+  if (!patient.email) throw new Error('Patient has no email address');
+  const result = await sendEmail({
+    to: patient.email,
+    subject: emailSubject ?? 'Message from your clinic',
+    body: content,
+  });
+  return result.externalId;
+}
+
 /** Send a message through the appropriate channel and log to DB. */
 export async function sendMessage(params: SendParams): Promise<{ id: string } | { skipped: string }> {
-  // Check opt-out
   if (await isOptedOut(params.patientId)) {
     return { skipped: 'patient_opted_out' };
   }
 
-  // Check automation enabled (for automated types)
   const automatedTypes: MessageType[] = ['reminder_48h', 'reminder_2h', 'post_visit', 're_engagement', 'review_request'];
-  if (automatedTypes.includes(params.type)) {
+  if (!params.skipAutomationChecks && automatedTypes.includes(params.type)) {
     if (!(await isAutomationEnabled(params.clinicId, params.type))) {
       return { skipped: 'automation_disabled' };
     }
@@ -101,7 +137,14 @@ export async function sendMessage(params: SendParams): Promise<{ id: string } | 
     }
   }
 
-  // Insert message record as queued
+  const [patient] = await db
+    .select({ phone: patients.phone, email: patients.email })
+    .from(patients)
+    .where(eq(patients.id, params.patientId))
+    .limit(1);
+
+  if (!patient) throw new Error('Patient not found');
+
   const [msg] = await db
     .insert(messages)
     .values({
@@ -118,25 +161,13 @@ export async function sendMessage(params: SendParams): Promise<{ id: string } | 
     .returning({ id: messages.id });
 
   try {
-    let externalId = '';
+    const externalId = await dispatchToChannel(
+      params.channel,
+      patient,
+      params.content,
+      params.emailSubject,
+    );
 
-    const [patient] = await db
-      .select({ phone: patients.phone })
-      .from(patients)
-      .where(eq(patients.id, params.patientId))
-      .limit(1);
-
-    if (!patient?.phone) throw new Error('Patient has no phone number');
-
-    if (params.channel === 'whatsapp') {
-      const result = await sendTextMessage(patient.phone, params.content);
-      externalId = result.externalId;
-    } else {
-      const result = await sendSms(patient.phone, params.content);
-      externalId = result.externalId;
-    }
-
-    // Update to sent
     await db
       .update(messages)
       .set({ status: 'sent', externalId, updatedAt: new Date() })
@@ -145,7 +176,6 @@ export async function sendMessage(params: SendParams): Promise<{ id: string } | 
     return { id: msg.id };
   } catch (error) {
     const friendly = formatSendError(error);
-    // Update to failed
     await db
       .update(messages)
       .set({
@@ -159,13 +189,54 @@ export async function sendMessage(params: SendParams): Promise<{ id: string } | 
   }
 }
 
+/**
+ * Try channels in cascade order until one succeeds.
+ * Returns message id on success, or throws after all channels fail.
+ */
+export async function sendMessageWithCascade(params: {
+  clinicId: string;
+  patientId: string;
+  appointmentId?: string;
+  type: MessageType;
+  content: string;
+  channelConfig: string;
+  metadata?: Record<string, unknown>;
+  emailSubject?: string;
+  skipAutomationChecks?: boolean;
+}): Promise<{ id: string; channel: OutboundChannel } | { skipped: string }> {
+  const channels = parseChannelCascade(params.channelConfig);
+  let lastError: Error | null = null;
+
+  for (const channel of channels) {
+    try {
+      const result = await sendMessage({
+        clinicId: params.clinicId,
+        patientId: params.patientId,
+        appointmentId: params.appointmentId,
+        channel,
+        type: params.type,
+        content: params.content,
+        metadata: { ...params.metadata, cascadeAttempt: channel },
+        emailSubject: params.emailSubject,
+        skipAutomationChecks: params.skipAutomationChecks,
+      });
+      if ('skipped' in result) return result;
+      return { id: result.id, channel };
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error('Send failed');
+    }
+  }
+
+  if (lastError) throw lastError;
+  return { skipped: 'no_channel_available' };
+}
+
 /** Build message content from automation template + variables. */
 export async function buildMessageContent(
   clinicId: string,
   type: string,
   vars: TemplateVars,
 ): Promise<string> {
-  // Try to get custom template from DB
   const [auto] = await db
     .select({ templateContent: automations.templateContent })
     .from(automations)

@@ -5,8 +5,11 @@ import {
   getElevenLabsDurationSec,
   getElevenLabsEventType,
   getElevenLabsFromNumber,
+  getElevenLabsSummary,
   getElevenLabsToNumber,
   getElevenLabsTranscript,
+  getElevenLabsTranscriptTurns,
+  isElevenLabsPostCallEvent,
   parseElevenLabsPayload,
 } from '@/lib/channels/voice/elevenlabs';
 import { getClinicSettings } from '@/db/queries/clinics';
@@ -29,12 +32,11 @@ export async function POST(request: NextRequest) {
   }
 
   const eventType = getElevenLabsEventType(payload);
-  const isPostCall =
-    eventType.includes('post_call') ||
-    eventType.includes('transcription') ||
-    payload.data?.status === 'done';
 
-  if (!isPostCall) {
+  if (!isElevenLabsPostCallEvent(payload)) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[elevenlabs/webhook] ignored event:', eventType);
+    }
     return NextResponse.json({ ok: true, ignored: true, eventType });
   }
 
@@ -69,6 +71,8 @@ export async function POST(request: NextRequest) {
     toNumber: getElevenLabsToNumber(payload) ?? undefined,
     direction: 'inbound',
     transcript: getElevenLabsTranscript(payload) || undefined,
+    summary: getElevenLabsSummary(payload) || undefined,
+    transcriptTurns: getElevenLabsTranscriptTurns(payload),
     durationSec: getElevenLabsDurationSec(payload) ?? undefined,
     payload: payload as Record<string, unknown>,
     reconcileOnly: true,

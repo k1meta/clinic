@@ -10,6 +10,11 @@ export interface SendMessageJobData {
   type: 'reminder_48h' | 'reminder_2h' | 'post_visit' | 're_engagement' | 'review_request';
 }
 
+export interface SendCampaignJobData {
+  campaignId: string;
+  clinicId: string;
+}
+
 export interface ProcessReplyJobData {
   clinicId: string;
   patientId: string;
@@ -37,6 +42,8 @@ export interface VoiceEventJobData {
   toNumber?: string;
   direction?: 'inbound' | 'outbound';
   transcript?: string;
+  summary?: string;
+  transcriptTurns?: Array<{ role?: string; message?: string; text?: string }>;
   durationSec?: number;
   payload: Record<string, unknown>;
   /** When true, worker only logs/reconciles — booking happens via real-time tool routes. */
@@ -102,6 +109,16 @@ export async function addRescheduleSelectionJob(data: RescheduleSelectionJobData
   return queue.add('reschedule-selection', data, {
     attempts: 3,
     backoff: { type: 'exponential', delay: 3000 },
+  });
+}
+
+export async function addSendCampaignJob(data: SendCampaignJobData) {
+  const queue = getMessagingQueue();
+  return queue.add('send-campaign', data, {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 5000 },
+    removeOnComplete: 1000,
+    removeOnFail: 5000,
   });
 }
 

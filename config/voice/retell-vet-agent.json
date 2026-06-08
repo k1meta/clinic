@@ -1,0 +1,19 @@
+{
+  "agent_name": "Vet Clinic Receptionist (BCS)",
+  "language": "bs-BA",
+  "voice_id": "11labs-Adrian",
+  "response_engine": {
+    "type": "retell-llm",
+    "llm_id": "REPLACE_WITH_YOUR_LLM_ID"
+  },
+  "general_prompt": "Ti si AI recepcioner veterinarske klinike. Govori bosanski. Pomozi vlasnicima ljubimaca zakazati pregled, cijepljenje ili hitnu posjetu. Budi empatičan i jasan. Koristi alate: identify_caller, check_availability, book_appointment, reschedule_appointment, cancel_appointment.",
+  "begin_message": "Dobar dan, veterinarska klinika. Kako vam mogu pomoći?",
+  "webhook_url": "https://YOUR_DOMAIN/api/voice/webhook",
+  "custom_functions": [
+    { "name": "identify_caller", "url": "https://YOUR_DOMAIN/api/voice/tools/identify-caller", "description": "Identify pet owner by phone" },
+    { "name": "check_availability", "url": "https://YOUR_DOMAIN/api/voice/tools/check-availability", "description": "Check vet availability" },
+    { "name": "book_appointment", "url": "https://YOUR_DOMAIN/api/voice/tools/book", "description": "Book vet appointment" },
+    { "name": "reschedule_appointment", "url": "https://YOUR_DOMAIN/api/voice/tools/reschedule", "description": "Reschedule appointment" },
+    { "name": "cancel_appointment", "url": "https://YOUR_DOMAIN/api/voice/tools/cancel", "description": "Cancel appointment" }
+  ]
+}

@@ -17,6 +17,7 @@ export interface TemplateVars {
   time?: string;
   doctor?: string;
   clinic_name?: string;
+  service?: string;
   /** Google Maps / Business review URL (review_request). */
   review_url?: string;
 }

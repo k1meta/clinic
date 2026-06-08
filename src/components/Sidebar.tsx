@@ -11,8 +11,9 @@ const navItems: { icon: string; label: string; href: string; adminOnly?: boolean
   { icon: "group", label: "Patients", href: "/patients" },
   { icon: "chat", label: "Messages", href: "/messages" },
   { icon: "mic", label: "Voice AI", href: "/voice-ai" },
-  { icon: "auto_awesome", label: "Automations", href: "#" },
-  { icon: "rate_review", label: "Reviews", href: "#" },
+  { icon: "auto_awesome", label: "Automations", href: "/automations", adminOnly: true },
+  { icon: "rate_review", label: "Reviews", href: "/reviews", adminOnly: true },
+  { icon: "campaign", label: "Campaigns", href: "/campaigns", adminOnly: true },
   { icon: "query_stats", label: "Analytics", href: "/analytics", adminOnly: true },
 ];
 
@@ -35,8 +36,15 @@ export default function Sidebar({ role, clinicName, fullName, initials }: Sideba
     router.refresh();
   }
 
+  const linkClass = (isActive: boolean) =>
+    `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors duration-200 ${
+      isActive
+        ? "text-primary font-bold border-r-2 border-primary bg-surface-container-low"
+        : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low"
+    }`;
+
   return (
-    <aside className="hidden md:flex flex-col h-screen w-64 bg-[#f7f9fb] py-6 px-4 sticky top-0 font-headline text-sm font-medium tracking-tight">
+    <aside className="hidden md:flex flex-col h-screen w-64 bg-surface py-6 px-4 sticky top-0 font-headline text-sm font-medium tracking-tight border-r border-surface-container-high/50">
       <div className="mb-10 px-2 flex items-center gap-3">
         <span
           className="material-symbols-outlined text-primary text-2xl"
@@ -48,7 +56,7 @@ export default function Sidebar({ role, clinicName, fullName, initials }: Sideba
           ClinicOS
         </span>
       </div>
-      <p className="text-[10px] text-slate-500 font-medium uppercase tracking-widest px-2 -mt-8 mb-8">
+      <p className="text-[10px] text-on-surface-variant font-medium uppercase tracking-widest px-2 -mt-8 mb-8">
         {clinicName}
       </p>
 
@@ -59,11 +67,7 @@ export default function Sidebar({ role, clinicName, fullName, initials }: Sideba
             <Link
               key={item.label}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors duration-200 ${
-                isActive
-                  ? "text-primary font-bold border-r-2 border-primary bg-[#f2f4f6]"
-                  : "text-slate-500 hover:text-slate-900 hover:bg-[#f2f4f6]"
-              }`}
+              className={linkClass(isActive)}
             >
               <span
                 className="material-symbols-outlined"
@@ -85,26 +89,22 @@ export default function Sidebar({ role, clinicName, fullName, initials }: Sideba
         {isAdmin && (
           <Link
             href="/settings"
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors duration-200 ${
-              pathname === "/settings"
-                ? "text-primary font-bold border-r-2 border-primary bg-[#f2f4f6]"
-                : "text-slate-500 hover:bg-[#f2f4f6]"
-            }`}
+            className={linkClass(pathname === "/settings")}
           >
             <span className="material-symbols-outlined" style={pathname === "/settings" ? { fontVariationSettings: "'FILL' 1" } : undefined}>settings</span>
             <span>Settings</span>
           </Link>
         )}
         <div className="mt-6 pt-6 border-t border-surface-container-high flex items-center gap-3 px-2">
-          <div className="w-10 h-10 rounded-full bg-primary-container overflow-hidden flex items-center justify-center text-white text-xs font-bold">
+          <div className="w-10 h-10 rounded-full bg-primary-container overflow-hidden flex items-center justify-center text-on-primary text-xs font-bold">
             {initials}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-on-surface truncate">{fullName}</p>
-            <p className="text-[10px] text-slate-500 capitalize">{role} · {clinicName}</p>
+            <p className="text-[10px] text-on-surface-variant capitalize">{role} · {clinicName}</p>
           </div>
-          <button onClick={handleSignOut} className="p-1.5 rounded-lg hover:bg-[#f2f4f6] transition-colors" title="Sign out">
-            <span className="material-symbols-outlined text-slate-400 text-lg">logout</span>
+          <button onClick={handleSignOut} className="p-1.5 rounded-lg hover:bg-surface-container-low transition-colors" title="Sign out">
+            <span className="material-symbols-outlined text-outline text-lg">logout</span>
           </button>
         </div>
       </div>

@@ -1,8 +1,8 @@
 import { db } from '@/db';
-import { appointments, patients, doctors, messages, automations } from '@/db/schema';
+import { appointments, patients, doctors, messages, automations, clinics } from '@/db/schema';
 import type { AutomationTypeName } from '@/db/schema/automations';
 import { and, eq, inArray } from 'drizzle-orm';
-import { sendMessage, buildMessageContent } from '@/lib/messaging';
+import { sendMessage, sendMessageWithCascade, buildMessageContent, getAutomationChannel } from '@/lib/messaging';
 import { sendTemplateMessage } from '@/lib/channels/whatsapp';
 import type { SendMessageJobData } from '@/lib/queue';
 import { getClinicSettings } from '@/db/queries/clinics';
@@ -170,11 +170,15 @@ export async function processSendMessage(data: SendMessageJobData) {
     }
 
     const clinicSettings = await getClinicSettings(clinicId);
-    const reviewUrl = clinicSettings.googleReviewUrl.trim();
-    if (!reviewUrl) {
+    const baseReviewUrl = clinicSettings.googleReviewUrl.trim();
+    if (!baseReviewUrl) {
       console.log('Skipping review_request: no googleReviewUrl in clinic settings', clinicId);
       return;
     }
+
+    const reviewUrl = baseReviewUrl.includes('?')
+      ? `${baseReviewUrl}&utm_source=clinicos&utm_medium=review_request`
+      : `${baseReviewUrl}?utm_source=clinicos&utm_medium=review_request`;
 
     const renderedContent = await buildMessageContent(clinicId, 'review_request', {
       patient_name: patient.fullName,
@@ -217,18 +221,66 @@ export async function processSendMessage(data: SendMessageJobData) {
           updatedAt: new Date(),
         })
         .where(eq(messages.id, logged.id));
+
+      const channelConfig = await getAutomationChannel(clinicId, 'review_request');
+      if (channelConfig.includes(',')) {
+        await sendMessageWithCascade({
+          clinicId,
+          patientId,
+          appointmentId,
+          type: 'review_request',
+          content: renderedContent,
+          channelConfig,
+          emailSubject: 'We would love your feedback',
+          metadata: { fallbackAfterTemplateFail: true },
+          skipAutomationChecks: true,
+        });
+        return;
+      }
       throw err;
     }
     return;
   }
 
-  // All other types (reminder_2h, post_visit, re_engagement) keep going through
-  // the freetext / SMS pathway — they're sent via templates only if you swap the
-  // helper later. SMS has no template restriction.
+  const [clinicRow] = await db
+    .select({ name: clinics.name })
+    .from(clinics)
+    .where(eq(clinics.id, clinicId))
+    .limit(1);
+  const clinicSettings = await getClinicSettings(clinicId);
   const content = await buildMessageContent(clinicId, type, {
-    patient_name: patient.fullName, date, time, doctor: doctorName,
+    patient_name: patient.fullName,
+    date,
+    time,
+    doctor: doctorName,
+    clinic_name: clinicRow?.name,
+    review_url: type === 'review_request' ? clinicSettings.googleReviewUrl : undefined,
   });
-  const channel = type === 'reminder_2h' ? 'sms' : 'whatsapp';
 
-  await sendMessage({ clinicId, patientId, appointmentId, channel, type, content });
+  const channelConfig = await getAutomationChannel(clinicId, type);
+  const useCascade = channelConfig.includes(',');
+
+  if (useCascade) {
+    await sendMessageWithCascade({
+      clinicId,
+      patientId,
+      appointmentId,
+      type,
+      content,
+      channelConfig,
+      emailSubject: type === 're_engagement' ? 'We miss you!' : 'Message from your clinic',
+    });
+    return;
+  }
+
+  const singleChannel = channelConfig as 'whatsapp' | 'sms' | 'email';
+  await sendMessage({
+    clinicId,
+    patientId,
+    appointmentId,
+    channel: singleChannel,
+    type,
+    content,
+    emailSubject: type === 're_engagement' ? 'We miss you!' : 'Message from your clinic',
+  });
 }

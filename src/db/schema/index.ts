@@ -7,3 +7,5 @@ export { appointments, appointmentStatusEnum, appointmentSourceEnum, paymentStat
 export { messages, messageChannelEnum, messageDirectionEnum, messageTypeEnum, messageStatusEnum } from './messages';
 export { automations, automationTypeEnum } from './automations';
 export { calls, callDirectionEnum, callStatusEnum } from './calls';
+export { reviews } from './reviews';
+export { campaigns, campaignRecipients, campaignStatusEnum } from './campaigns';

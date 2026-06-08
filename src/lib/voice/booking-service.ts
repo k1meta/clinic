@@ -1,4 +1,4 @@
-import { and, eq, gte, ilike, inArray, or } from 'drizzle-orm';
+import { and, count, eq, gte, ilike, inArray, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { appointments, calls, doctors, patients } from '@/db/schema';
 import {
@@ -16,7 +16,10 @@ export type VoiceBookingErrorCode =
   | 'slot_unavailable'
   | 'no_upcoming_appointment'
   | 'no_slots'
-  | 'ai_calls_disabled';
+  | 'ai_calls_disabled'
+  | 'no_caller_phone'
+  | 'missing_patient_name'
+  | 'missing_patient_phone';
 
 export type VoiceBookingResult<T> =
   | { ok: true; data: T }
@@ -34,18 +37,28 @@ function msg(language: string | undefined, bs: string, en: string) {
   return language?.toLowerCase().startsWith('en') ? en : bs;
 }
 
+function phoneDigits(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
+
+function phoneMatchCondition(clinicId: string, phone: string) {
+  const variants = phoneMatchVariants(phone);
+  const digits = phoneDigits(phone);
+  return and(
+    eq(patients.clinicId, clinicId),
+    or(
+      ...variants.map((v) => eq(patients.phone, v)),
+      sql`regexp_replace(coalesce(${patients.phone}, ''), '[^0-9]', '', 'g') = ${digits}`,
+    )!,
+  );
+}
+
 export async function findPatientByPhone(clinicId: string, phone: string | null | undefined) {
   if (!phone) return null;
-  const variants = phoneMatchVariants(phone);
   const [patient] = await db
     .select({ id: patients.id, fullName: patients.fullName, phone: patients.phone })
     .from(patients)
-    .where(
-      and(
-        eq(patients.clinicId, clinicId),
-        or(...variants.map((v) => eq(patients.phone, v)))!,
-      ),
-    )
+    .where(phoneMatchCondition(clinicId, phone))
     .limit(1);
   return patient ?? null;
 }
@@ -70,6 +83,214 @@ export async function findOrCreatePatientByPhone(params: {
     .returning({ id: patients.id, fullName: patients.fullName, phone: patients.phone });
 
   return created;
+}
+
+const PLACEHOLDER_PATIENT_NAME = 'Nepoznati pacijent';
+
+export async function createPatientForVoiceBooking(params: {
+  clinicId: string;
+  phone: string;
+  fullName: string;
+}) {
+  const name = params.fullName.trim();
+  if (!name) {
+    throw new Error('fullName is required for voice booking registration');
+  }
+
+  const [created] = await db
+    .insert(patients)
+    .values({
+      clinicId: params.clinicId,
+      fullName: name,
+      phone: normalizePhone(params.phone),
+      status: 'new',
+    })
+    .returning({ id: patients.id, fullName: patients.fullName, phone: patients.phone });
+
+  return created;
+}
+
+export async function updatePatientNameIfPlaceholder(patientId: string, fullName: string) {
+  const name = fullName.trim();
+  if (!name) return null;
+
+  const [updated] = await db
+    .update(patients)
+    .set({ fullName: name, updatedAt: new Date() })
+    .where(and(eq(patients.id, patientId), eq(patients.fullName, PLACEHOLDER_PATIENT_NAME)))
+    .returning({ id: patients.id, fullName: patients.fullName, phone: patients.phone });
+
+  if (updated) return updated;
+
+  const [existing] = await db
+    .select({ id: patients.id, fullName: patients.fullName, phone: patients.phone })
+    .from(patients)
+    .where(eq(patients.id, patientId))
+    .limit(1);
+
+  return existing ?? null;
+}
+
+export type CallerType = 'unknown' | 'new' | 'returning';
+
+export type CallerProfile = {
+  callerType: CallerType;
+  patientId?: string;
+  patientName?: string;
+  firstName?: string;
+  upcomingAppointment?: { date: string; time: string; doctorName: string };
+  completedVisitCount: number;
+  ambiguous?: boolean;
+  matchedNames?: string[];
+  message: string;
+};
+
+function parseFirstName(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] ?? fullName;
+}
+
+async function findPatientsByPhone(clinicId: string, phone: string) {
+  return db
+    .select({
+      id: patients.id,
+      fullName: patients.fullName,
+      phone: patients.phone,
+      status: patients.status,
+    })
+    .from(patients)
+    .where(phoneMatchCondition(clinicId, phone));
+}
+
+async function countCompletedVisits(clinicId: string, patientId: string) {
+  const [row] = await db
+    .select({ total: count() })
+    .from(appointments)
+    .where(
+      and(
+        eq(appointments.clinicId, clinicId),
+        eq(appointments.patientId, patientId),
+        eq(appointments.status, 'completed'),
+      ),
+    );
+  return row?.total ?? 0;
+}
+
+async function getUpcomingAppointmentWithDoctor(clinicId: string, patientId: string) {
+  const upcoming = await getUpcomingAppointment(clinicId, patientId);
+  if (!upcoming) return null;
+
+  const [doctor] = await db
+    .select({ fullName: doctors.fullName })
+    .from(doctors)
+    .where(eq(doctors.id, upcoming.doctorId))
+    .limit(1);
+
+  const date = new Date(upcoming.startsAt).toISOString().slice(0, 10);
+  const time = new Date(upcoming.startsAt).toTimeString().slice(0, 5);
+  return {
+    date,
+    time,
+    doctorName: doctor?.fullName ?? 'Doktor',
+  };
+}
+
+function buildCallerMessage(
+  profile: Omit<CallerProfile, 'message'>,
+  language?: string,
+): string {
+  const en = language?.toLowerCase().startsWith('en');
+
+  if (profile.ambiguous && profile.matchedNames?.length) {
+    const names = profile.matchedNames.join(', ');
+    return en
+      ? `Multiple patients share this phone number: ${names}. Ask who is calling.`
+      : `Na ovom broju telefona vise pacijenata: ${names}. Pitaj ko telefonira.`;
+  }
+
+  if (profile.callerType === 'unknown') {
+    return en
+      ? 'New caller - not in the system. Ask for full name before booking.'
+      : 'Novi pozivatelj - nije u bazi. Pitaj ime i prezime prije zakazivanja.';
+  }
+
+  const name = profile.patientName ?? '';
+  const first = profile.firstName ?? name;
+
+  if (profile.callerType === 'new') {
+    return en
+      ? `Patient ${name} is on file but has no prior visits. Confirm their identity briefly.`
+      : `Pacijent ${name} je u bazi ali nema prethodnih posjeta. Kratko potvrdi identitet.`;
+  }
+
+  const upcoming = profile.upcomingAppointment;
+  if (upcoming) {
+    return en
+      ? `Returning patient: ${name}. Next appointment ${upcoming.date} at ${upcoming.time} with ${upcoming.doctorName}. Greet ${first} by name and confirm identity once.`
+      : `Poznat pacijent: ${name}. Sljedeci termin ${upcoming.date} u ${upcoming.time} kod ${upcoming.doctorName}. Pozdravi ${first} po imenu i kratko potvrdi identitet.`;
+  }
+
+  return en
+    ? `Returning patient: ${name}. No upcoming appointment. Greet ${first} by name and confirm identity once.`
+    : `Poznat pacijent: ${name}. Nema zakazanog termina. Pozdravi ${first} po imenu i kratko potvrdi identitet.`;
+}
+
+export async function lookupCallerProfile(params: {
+  clinicId: string;
+  phone: string;
+  language?: string;
+}): Promise<VoiceBookingResult<CallerProfile>> {
+  const matches = await findPatientsByPhone(params.clinicId, params.phone);
+
+  if (matches.length === 0) {
+    const profile: CallerProfile = {
+      callerType: 'unknown',
+      completedVisitCount: 0,
+      message: '',
+    };
+    profile.message = buildCallerMessage(profile, params.language);
+    return { ok: true, data: profile };
+  }
+
+  if (matches.length > 1) {
+    const names = matches.map((p) => p.fullName);
+    const primary = matches[0];
+    const completedVisitCount = await countCompletedVisits(params.clinicId, primary.id);
+    const upcomingAppointment = await getUpcomingAppointmentWithDoctor(params.clinicId, primary.id);
+    const callerType: CallerType =
+      completedVisitCount > 0 || primary.status === 'active' ? 'returning' : 'new';
+
+    const profile: CallerProfile = {
+      callerType,
+      patientId: primary.id,
+      patientName: primary.fullName,
+      firstName: parseFirstName(primary.fullName),
+      upcomingAppointment: upcomingAppointment ?? undefined,
+      completedVisitCount,
+      ambiguous: true,
+      matchedNames: names,
+      message: '',
+    };
+    profile.message = buildCallerMessage(profile, params.language);
+    return { ok: true, data: profile };
+  }
+
+  const patient = matches[0];
+  const completedVisitCount = await countCompletedVisits(params.clinicId, patient.id);
+  const callerType: CallerType =
+    completedVisitCount > 0 || patient.status === 'active' ? 'returning' : 'new';
+  const upcomingAppointment = await getUpcomingAppointmentWithDoctor(params.clinicId, patient.id);
+
+  const profile: CallerProfile = {
+    callerType,
+    patientId: patient.id,
+    patientName: patient.fullName,
+    firstName: parseFirstName(patient.fullName),
+    upcomingAppointment: upcomingAppointment ?? undefined,
+    completedVisitCount,
+    message: '',
+  };
+  profile.message = buildCallerMessage(profile, params.language);
+  return { ok: true, data: profile };
 }
 
 function isUuid(value: string): boolean {

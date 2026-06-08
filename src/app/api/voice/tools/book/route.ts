@@ -6,7 +6,7 @@ import {
   readToolDoctorId,
   readToolDuration,
   readToolTime,
-  resolveToolPatient,
+  resolveToolPatientForBooking,
 } from '@/lib/voice/tool-actions';
 import { bookVoiceAppointment } from '@/lib/voice/booking-service';
 import { failToolJson, okToolJson, parseAuthorizedVoiceToolRequest } from '@/lib/voice/tool-route';
@@ -22,10 +22,12 @@ export async function POST(request: NextRequest) {
     return failToolJson('Potrebni su datum (YYYY-MM-DD) i vrijeme (HH:MM).', 'invalid_datetime');
   }
 
-  const patient = await resolveToolPatient(parsed, { allowCreate: true });
-  if (!patient) {
-    return failToolJson('Nije moguce identificirati pacijenta bez broja telefona.', 'patient_not_found');
+  const patientResult = await resolveToolPatientForBooking(parsed);
+  if (!patientResult.ok) {
+    return failToolJson(patientResult.error, patientResult.code);
   }
+
+  const { patient, patientRegistered } = patientResult.data;
 
   const result = await bookVoiceAppointment({
     ctx: buildVoiceContext(parsed),
@@ -47,5 +49,6 @@ export async function POST(request: NextRequest) {
     time: result.data.time,
     doctorName: result.data.doctorName,
     patientName: patient.fullName,
+    patientRegistered,
   });
 }

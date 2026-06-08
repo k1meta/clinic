@@ -1,0 +1,103 @@
+{
+  "agent_name": "ClinicOS BCS Receptionist (ElevenLabs)",
+  "language": "bs-BA",
+  "telephony": {
+    "provider": "twilio_or_elevenlabs_sip",
+    "number_example": "+387XXXXXXXX"
+  },
+  "dynamic_variables": {
+    "clinicId": "00000000-0000-0000-0000-000000000001",
+    "from_number": "{{caller_phone}}"
+  },
+  "system_prompt": "Ti si ljubazna recepcionistka privatne klinike. Govoris bosanski (ijekavica). Pomazes pacijentima da zakažu, pomjere ili otkažu termine.\n\nPravila:\n1. Na pocetku svakog poziva OBAVEZNO pozovi identify_caller prije ostalih alata.\n2. Ako je poznat pacijent (returning) — pozdravi po imenu i kratko potvrdi identitet.\n3. Ako je novi pozivatelj (unknown ili new) — pitaj ime i prezime TE broj telefona prije book_appointment.\n4. Ako je ambiguous — pitaj ko telefonira.\n5. Ne spominji medicinske detalje — samo ime i sljedeci termin ako postoji.\n6. Za returning: book_appointment samo sa date, time, doctor_id.\n7. Za nove: book_appointment mora imati patient_name i phone.\n8. Prije book/reschedule/cancel potvrdi datum, vrijeme i namjeru.\n9. Koristi check_availability kad termin nije siguran.\n10. Budi kratak, jasan, profesionalan.",
+  "server_tools": [
+    {
+      "name": "identify_caller",
+      "description": "Identificiraj pozivatelja po broju telefona. Pozovi na pocetku svakog poziva.",
+      "method": "POST",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/identify-caller",
+      "request_body_schema": {
+        "type": "object",
+        "properties": {
+          "clinicId": { "type": "string", "description": "Clinic UUID from dynamic variables." },
+          "phone": { "type": "string", "description": "Caller phone from dynamic variable from_number." }
+        }
+      }
+    },
+    {
+      "name": "check_availability",
+      "description": "Provjeri slobodne termine u kalendaru klinike.",
+      "method": "POST",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/check-availability",
+      "request_body_schema": {
+        "type": "object",
+        "properties": {
+          "clinicId": { "type": "string", "description": "Clinic UUID from dynamic variables." },
+          "date": { "type": "string", "description": "Datum YYYY-MM-DD." },
+          "duration_min": { "type": "number", "description": "Trajanje u minutama." },
+          "doctor_id": { "type": "string", "description": "UUID doktora ako je poznat." },
+          "limit": { "type": "number", "description": "Broj slotova, default 5." }
+        }
+      }
+    },
+    {
+      "name": "book_appointment",
+      "description": "Zakazi potvrdeni termin. Za NOVE pozivatelje obavezni patient_name i phone. Za RETURNING samo date i time.",
+      "method": "POST",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/book",
+      "request_body_schema": {
+        "type": "object",
+        "required": ["date", "time"],
+        "properties": {
+          "clinicId": { "type": "string" },
+          "date": { "type": "string" },
+          "time": { "type": "string" },
+          "duration_min": { "type": "number" },
+          "doctor_id": { "type": "string" },
+          "patient_name": { "type": "string", "description": "Ime i prezime — obavezno za nove pacijente." },
+          "phone": { "type": "string", "description": "Broj telefona — obavezno za nove pacijente bez caller ID." }
+        }
+      }
+    },
+    {
+      "name": "reschedule_appointment",
+      "description": "Pomjeri najblizi nadolazeci termin pacijenta.",
+      "method": "POST",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/reschedule",
+      "request_body_schema": {
+        "type": "object",
+        "properties": {
+          "clinicId": { "type": "string" },
+          "date": { "type": "string" },
+          "time": { "type": "string" },
+          "duration_min": { "type": "number" }
+        }
+      }
+    },
+    {
+      "name": "cancel_appointment",
+      "description": "Otkazi najblizi nadolazeci termin pacijenta.",
+      "method": "POST",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/cancel",
+      "request_body_schema": {
+        "type": "object",
+        "properties": {
+          "clinicId": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "webhooks": {
+    "post_call": "https://YOUR_DOMAIN/api/voice/elevenlabs/webhook"
+  },
+  "auth": {
+    "header": "Authorization: Bearer YOUR_VOICE_TOOLS_API_KEY",
+    "or_signature": "ElevenLabs-Signature via ELEVENLABS_WEBHOOK_SECRET"
+  },
+  "dashboard_notes": [
+    "Set dynamic variable from_number to {{caller_phone}} for telephony calls.",
+    "Map clinicId and from_number into each server tool request body in the ElevenLabs agent editor.",
+    "For web test calls, identify_caller returns unknown — collect patient_name and phone before book_appointment."
+  ]
+}

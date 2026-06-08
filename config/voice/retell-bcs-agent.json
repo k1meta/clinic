@@ -9,8 +9,23 @@
   "metadata_on_outbound_or_inbound": {
     "clinicId": "00000000-0000-0000-0000-000000000001"
   },
-  "system_prompt": "Ti si ljubazna recepcionistka privatne klinike. Govoris bosanski (ijekavica). Pomazes pacijentima da:\n- zakažu novi termin\n- pomjere postojeci termin\n- otkažu termin\n- provjere slobodne termine\n\nPravila:\n1. Na pocetku kratko pozdravi i pitaj kako mozes pomoci.\n2. Prije book/reschedule/cancel poziva odgovarajuci tool — potvrdi datum, vrijeme i namjeru.\n3. Za book/reschedule/cancel prvo pozovi check_availability ako termin nije siguran.\n4. Kad korisnik potvrdi slot, pozovi book_appointment ili reschedule_appointment ili cancel_appointment.\n5. Ako je termin zauzet, ponudi alternative iz tool odgovora.\n6. Budi kratak, jasan, profesionalan.\n7. Na kraju ponovi potvrdu: datum, vrijeme, doktor ako poznat.",
+  "system_prompt": "Ti si ljubazna recepcionistka privatne klinike. Govoris bosanski (ijekavica). Pomazes pacijentima da:\n- zakažu novi termin\n- pomjere postojeci termin\n- otkažu termin\n- provjere slobodne termine\n\nPravila:\n1. Na pocetku svakog poziva OBAVEZNO pozovi identify_caller prije ostalih alata.\n2. Ako je poznat pacijent (returning) — pozdravi po imenu i kratko potvrdi identitet jednom recenicom.\n3. Ako je novi pozivatelj (unknown ili new) — pitaj ime i prezime TE broj telefona (potvrdi caller ID ili pitaj) prije book_appointment.\n4. Ako je ambiguous — pitaj ko telefonira.\n5. Ne spominji medicinske detalje — samo ime i sljedeci termin ako postoji.\n6. Za returning pacijente: book_appointment samo sa date, time, doctor_id — ne pitaj ponovo ime.\n7. Za nove pacijente: book_appointment mora imati patient_name i phone (ili caller ID).\n8. Prije book/reschedule/cancel poziva odgovarajuci tool — potvrdi datum, vrijeme i namjeru.\n9. Za book/reschedule/cancel prvo pozovi check_availability ako termin nije siguran.\n10. Kad korisnik potvrdi slot, pozovi book_appointment ili reschedule_appointment ili cancel_appointment.\n11. Ako je termin zauzet, ponudi alternative iz tool odgovora.\n12. Budi kratak, jasan, profesionalan.\n13. Na kraju ponovi potvrdu: datum, vrijeme, doktor ako poznat.",
   "custom_functions": [
+    {
+      "name": "identify_caller",
+      "description": "Identificiraj pozivatelja po broju telefona. Pozovi na pocetku svakog poziva.",
+      "url": "https://YOUR_DOMAIN/api/voice/tools/identify-caller",
+      "method": "POST",
+      "speak_during_execution": true,
+      "speak_during_execution_message": "Samo trenutak, provjeravam vase podatke.",
+      "speak_after_execution": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "phone": { "type": "string", "description": "Broj pozivatelja iz call metadata (from_number). Opcionalno." }
+        }
+      }
+    },
     {
       "name": "check_availability",
       "description": "Provjeri slobodne termine u kalendaru klinike.",
@@ -32,7 +47,7 @@
     },
     {
       "name": "book_appointment",
-      "description": "Zakazi potvrdeni termin za pozivatelja.",
+      "description": "Zakazi potvrdeni termin. Za NOVE pozivatelje (unknown/new) obavezni patient_name i phone. Za RETURNING pacijente samo date i time.",
       "url": "https://YOUR_DOMAIN/api/voice/tools/book",
       "method": "POST",
       "speak_during_execution": true,
@@ -46,8 +61,8 @@
           "time": { "type": "string", "description": "Vrijeme HH:MM 24h." },
           "duration_min": { "type": "number", "description": "Trajanje u minutama." },
           "doctor_id": { "type": "string", "description": "UUID doktora." },
-          "patient_name": { "type": "string", "description": "Ime pacijenta ako nije u bazi." },
-          "phone": { "type": "string", "description": "Telefon pacijenta ako nije u call metadata." }
+          "patient_name": { "type": "string", "description": "Ime i prezime — obavezno za nove pacijente." },
+          "phone": { "type": "string", "description": "Broj telefona — obavezno za nove pacijente ako nema caller ID. Za returning ne treba." }
         }
       }
     },

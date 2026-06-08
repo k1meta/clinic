@@ -1,11 +1,19 @@
 import { NextRequest } from 'next/server';
 import {
   checkVoiceAvailability,
-  findOrCreatePatientByPhone,
+  createPatientForVoiceBooking,
   findPatientByPhone,
+  lookupCallerProfile,
+  updatePatientNameIfPlaceholder,
   type VoiceBookingContext,
+  type VoiceBookingResult,
 } from '@/lib/voice/booking-service';
 import type { ParsedVoiceToolRequest } from '@/lib/voice/tool-request';
+
+export type BookingPatientResult = {
+  patient: { id: string; fullName: string; phone: string | null };
+  patientRegistered: boolean;
+};
 
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -30,7 +38,7 @@ export function buildVoiceContext(parsed: ParsedVoiceToolRequest): VoiceBookingC
   };
 }
 
-function resolveCallerPhone(parsed: ParsedVoiceToolRequest): string | null {
+export function resolveCallerPhone(parsed: ParsedVoiceToolRequest): string | null {
   const explicit = readString(parsed.args.phone) ?? parsed.fromNumber;
   if (explicit) return explicit;
 
@@ -43,16 +51,90 @@ function resolveCallerPhone(parsed: ParsedVoiceToolRequest): string | null {
   return null;
 }
 
+export function isSyntheticWebPhone(phone: string): boolean {
+  return phone.startsWith('web-');
+}
+
+function readToolPatientName(parsed: ParsedVoiceToolRequest): string | undefined {
+  return readString(parsed.args.patient_name) ?? readString(parsed.args.fullName);
+}
+
+function resolveRegisterPhone(parsed: ParsedVoiceToolRequest): string | null {
+  const candidates = [
+    readString(parsed.args.phone),
+    parsed.fromNumber ?? undefined,
+  ].filter((value): value is string => Boolean(value));
+
+  for (const phone of candidates) {
+    if (!isSyntheticWebPhone(phone)) return phone;
+  }
+
+  return null;
+}
+
+export async function resolveToolPatientForBooking(
+  parsed: ParsedVoiceToolRequest,
+): Promise<VoiceBookingResult<BookingPatientResult>> {
+  const lookupPhone = resolveCallerPhone(parsed);
+  if (!lookupPhone) {
+    return {
+      ok: false,
+      error: 'Nije moguce identificirati broj pozivatelja.',
+      code: 'missing_patient_phone',
+    };
+  }
+
+  const existing = await findPatientByPhone(parsed.clinicId!, lookupPhone);
+  if (existing) {
+    const providedName = readToolPatientName(parsed);
+    const patient =
+      existing.fullName === 'Nepoznati pacijent' && providedName
+        ? (await updatePatientNameIfPlaceholder(existing.id, providedName)) ?? existing
+        : existing;
+
+    return {
+      ok: true,
+      data: { patient, patientRegistered: false },
+    };
+  }
+
+  const fullName = readToolPatientName(parsed)?.trim();
+  if (!fullName) {
+    return {
+      ok: false,
+      error: 'Potrebno ime i prezime novog pacijenta prije zakazivanja.',
+      code: 'missing_patient_name',
+    };
+  }
+
+  const registerPhone = resolveRegisterPhone(parsed);
+  if (!registerPhone) {
+    return {
+      ok: false,
+      error: 'Potreban broj telefona novog pacijenta. Pitaj pozivatelja ili koristi broj s poziva.',
+      code: 'missing_patient_phone',
+    };
+  }
+
+  const patient = await createPatientForVoiceBooking({
+    clinicId: parsed.clinicId!,
+    phone: registerPhone,
+    fullName,
+  });
+
+  return {
+    ok: true,
+    data: { patient, patientRegistered: true },
+  };
+}
+
 export async function resolveToolPatient(parsed: ParsedVoiceToolRequest, options?: { allowCreate?: boolean }) {
   const phone = resolveCallerPhone(parsed);
   if (!phone) return null;
 
   if (options?.allowCreate) {
-    return findOrCreatePatientByPhone({
-      clinicId: parsed.clinicId!,
-      phone,
-      fullName: readString(parsed.args.patient_name) ?? readString(parsed.args.fullName),
-    });
+    const result = await resolveToolPatientForBooking(parsed);
+    return result.ok ? result.data.patient : null;
   }
 
   return findPatientByPhone(parsed.clinicId!, phone);
@@ -97,5 +179,22 @@ export async function runCheckAvailability(parsed: ParsedVoiceToolRequest) {
     doctorId: readToolDoctorId(parsed),
     durationMin: readToolDuration(parsed),
     limit: readToolLimit(parsed),
+  });
+}
+
+export async function runIdentifyCaller(parsed: ParsedVoiceToolRequest) {
+  const phone = resolveCallerPhone(parsed);
+  if (!phone) {
+    return {
+      ok: false as const,
+      error: 'Nije moguce identificirati broj pozivatelja.',
+      code: 'no_caller_phone' as const,
+    };
+  }
+
+  return lookupCallerProfile({
+    clinicId: parsed.clinicId!,
+    phone,
+    language: parsed.language,
   });
 }

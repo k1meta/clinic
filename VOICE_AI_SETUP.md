@@ -38,6 +38,7 @@ If webhook secrets are unset, signature verification is skipped in dev.
 
 | Route | Purpose |
 |-------|---------|
+| `POST /api/voice/tools/identify-caller` | Recognize caller by phone (new vs returning) |
 | `POST /api/voice/tools/check-availability` | Live slot lookup |
 | `POST /api/voice/tools/book` | Create appointment |
 | `POST /api/voice/tools/reschedule` | Move next upcoming appt |
@@ -77,21 +78,79 @@ Verified via (first match wins):
 
 On conflict (slot taken), `success: false` includes alternative slots in `message`.
 
+## Caller recognition (`identify_caller`)
+
+At the start of each call, the agent should call `POST /api/voice/tools/identify-caller`. ClinicOS looks up the caller's phone number in the patient database and returns:
+
+| `callerType` | Meaning |
+|--------------|---------|
+| `unknown` | Phone not in database — agent asks for full name |
+| `new` | Patient on file but no completed visits |
+| `returning` | Known patient with visit history — greet by name |
+
+Response includes `patientName`, `firstName`, optional `upcomingAppointment`, and a Bosnian `message` for the agent to speak.
+
+**Phone resolution order:** tool param `phone` → Retell/ElevenLabs `from_number` metadata → ElevenLabs web-call synthetic id.
+
+**ElevenLabs telephony:** set dynamic variable `from_number` to `{{caller_phone}}` and include it in the `identify_caller` tool body (see [`config/voice/elevenlabs-bcs-agent.json`](config/voice/elevenlabs-bcs-agent.json)).
+
+**Retell:** caller ID is passed automatically via `call.from_number` — no extra config needed.
+
+**Manual test:**
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/api/voice/tools/identify-caller" `
+  -Method POST `
+  -Headers @{ Authorization = "Bearer YOUR_VOICE_TOOLS_API_KEY" } `
+  -ContentType "application/json" `
+  -Body '{"clinicId":"00000000-0000-0000-0000-000000000001","phone":"+38761234567"}'
+```
+
+### Booking: new vs returning patients
+
+After `identify_caller`, the agent follows different paths for `book_appointment`:
+
+| Caller type | Before booking | `book_appointment` params |
+|-------------|----------------|---------------------------|
+| `returning` | Greet by name, confirm identity | `date`, `time`, optional `doctor_id` only |
+| `unknown` / `new` | Collect full name + phone | `date`, `time`, **`patient_name`**, **`phone`** (or caller ID) |
+
+Backend behavior:
+- **Returning** — matches phone in DB, books under existing patient record (`patientRegistered: false`)
+- **New** — creates patient with normalized phone + name, then books (`patientRegistered: true`)
+- Never creates `'Nepoznati pacijent'` from voice booking
+
+Error codes for the agent to recover:
+- `missing_patient_name` — ask for full name, retry book
+- `missing_patient_phone` — ask for phone or confirm caller ID, retry book
+
+```
+New caller     → identify (unknown) → collect name + phone → book (registers patient)
+Returning      → identify (returning) → book (uses existing record by phone)
+```
+
 ## Retell BCS agent (Bosnian / Croatian / Serbian)
 
 Dashboard config reference: [`config/voice/retell-bcs-agent.json`](config/voice/retell-bcs-agent.json)
 
 1. Create agent with language **bs-BA** (single language — best ASR accuracy).
-2. Attach 4 custom functions pointing at your deployed tool URLs.
+2. Attach **5** custom functions pointing at your deployed tool URLs (include `identify_caller`).
 3. Paste Bosnian system prompt from config file.
 4. Set call webhook to `POST /api/voice/webhook`.
 5. On phone number / agent, set metadata `clinicId`.
 6. Connect Twilio +387 (or +385 / +381) number.
 
 Prompt triggers:
+- Call start → `identify_caller` → greet by name or ask for name
 - "termin" → check_availability → book_appointment
 - "otkazati" → cancel_appointment
 - "pomjeriti" → check_availability → reschedule_appointment
+
+## ElevenLabs BCS agent (Bosnian)
+
+Dashboard config reference: [`config/voice/elevenlabs-bcs-agent.json`](config/voice/elevenlabs-bcs-agent.json)
+
+Same flow as Retell BCS — use Bosnian voice, 5 server tools, dynamic variables `clinicId` + `from_number`.
 
 ## ElevenLabs English agent
 

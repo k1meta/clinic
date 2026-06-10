@@ -3,11 +3,17 @@ import { appointments, messages, patients, doctors } from '@/db/schema';
 import { eq, and, gte, lte, ne, notExists, sql } from 'drizzle-orm';
 import { addSendMessageJob } from '@/lib/queue';
 
-/** Scan for appointments needing 48h WhatsApp reminders. */
+/**
+ * Backup scan for missed 48 h reminders only.
+ * Primary path: `schedule48hReminderIfEligible` fires at exactly T−48 h on booking.
+ * This catches appointments whose send time passed (within a 2 h grace) but no message went out.
+ */
 export async function scan48hReminders() {
   const now = new Date();
-  const from = new Date(now.getTime() + 47 * 60 * 60 * 1000);
-  const to = new Date(now.getTime() + 49 * 60 * 60 * 1000);
+  // Send time = startsAt − 48 h has passed when startsAt <= now + 48 h
+  const sendTimePassedBefore = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+  // Grace: only appts still within 46–48 h window (avoid firing day-before reminders early)
+  const graceFloor = new Date(now.getTime() + 46 * 60 * 60 * 1000);
 
   const rows = await db
     .select({
@@ -19,8 +25,9 @@ export async function scan48hReminders() {
     .where(
       and(
         ne(appointments.status, 'cancelled'),
-        gte(appointments.startsAt, from),
-        lte(appointments.startsAt, to),
+        gte(appointments.startsAt, now),
+        gte(appointments.startsAt, graceFloor),
+        lte(appointments.startsAt, sendTimePassedBefore),
         notExists(
           db.select({ x: sql`1` })
             .from(messages)

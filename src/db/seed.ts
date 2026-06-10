@@ -188,11 +188,11 @@ async function seed() {
   // 6. Automation rules (enabled by default so the reminder pipeline runs).
   // Table has no unique key on (clinic_id, type), so we manually skip if a row already exists.
   const automationRows = [
-    { clinicId: DEMO_CLINIC_ID, type: 'reminder_48h' as const,  channel: 'whatsapp', templateContent: DEFAULT_TEMPLATES.reminder_48h, isEnabled: true,  quietHoursStart: 21, quietHoursEnd: 8 },
-    { clinicId: DEMO_CLINIC_ID, type: 'reminder_2h' as const,   channel: 'sms',      templateContent: DEFAULT_TEMPLATES.reminder_2h,  isEnabled: true,  quietHoursStart: 21, quietHoursEnd: 8 },
-    { clinicId: DEMO_CLINIC_ID, type: 'post_visit' as const,    channel: 'whatsapp', templateContent: DEFAULT_TEMPLATES.post_visit,   isEnabled: true,  quietHoursStart: 21, quietHoursEnd: 8 },
-    { clinicId: DEMO_CLINIC_ID, type: 're_engagement' as const, channel: 'whatsapp', templateContent: DEFAULT_TEMPLATES.re_engagement,isEnabled: false, quietHoursStart: 21, quietHoursEnd: 8 },
-    { clinicId: DEMO_CLINIC_ID, type: 'review_request' as const, channel: 'whatsapp', templateContent: DEFAULT_TEMPLATES.review_request, isEnabled: true, quietHoursStart: 21, quietHoursEnd: 8 },
+    { clinicId: DEMO_CLINIC_ID, type: 'reminder_48h' as const,  channel: 'whatsapp', templateContent: DEFAULT_TEMPLATES.reminder_48h, isEnabled: true },
+    { clinicId: DEMO_CLINIC_ID, type: 'reminder_2h' as const,   channel: 'sms',      templateContent: DEFAULT_TEMPLATES.reminder_2h,  isEnabled: true },
+    { clinicId: DEMO_CLINIC_ID, type: 'post_visit' as const,    channel: 'whatsapp', templateContent: DEFAULT_TEMPLATES.post_visit,   isEnabled: true },
+    { clinicId: DEMO_CLINIC_ID, type: 're_engagement' as const, channel: 'whatsapp', templateContent: DEFAULT_TEMPLATES.re_engagement, isEnabled: false },
+    { clinicId: DEMO_CLINIC_ID, type: 'review_request' as const, channel: 'whatsapp', templateContent: DEFAULT_TEMPLATES.review_request, isEnabled: true },
   ];
   const { eq: eqAuto, and: andAuto } = await import('drizzle-orm');
   for (const a of automationRows) {

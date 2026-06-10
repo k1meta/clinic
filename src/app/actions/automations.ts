@@ -15,8 +15,6 @@ export async function getAutomations() {
       isEnabled: automations.isEnabled,
       channel: automations.channel,
       templateContent: automations.templateContent,
-      quietHoursStart: automations.quietHoursStart,
-      quietHoursEnd: automations.quietHoursEnd,
     })
     .from(automations)
     .where(eq(automations.clinicId, clinicId));
@@ -63,18 +61,6 @@ export async function updateAutomationChannel(automationId: string, channel: str
   await db
     .update(automations)
     .set({ channel, updatedAt: new Date() })
-    .where(and(eq(automations.id, automationId), eq(automations.clinicId, clinicId)));
-
-  revalidatePath('/automations');
-  return { success: true };
-}
-
-export async function updateQuietHours(automationId: string, start: number, end: number) {
-  const { clinicId } = await requireAdmin();
-
-  await db
-    .update(automations)
-    .set({ quietHoursStart: start, quietHoursEnd: end, updatedAt: new Date() })
     .where(and(eq(automations.id, automationId), eq(automations.clinicId, clinicId)));
 
   revalidatePath('/automations');

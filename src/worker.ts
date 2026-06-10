@@ -3,6 +3,7 @@ config({ path: '.env.local' });
 
 import { Worker } from 'bullmq';
 import { getWorkerConnection } from '@/lib/redis';
+import { isRedisHostReachable, useInlineQueueFallback } from '@/lib/redis-health';
 import { getSchedulerQueue } from '@/lib/queue';
 import type { SendMessageJobData, ProcessReplyJobData, VoiceEventJobData, SendCampaignJobData } from '@/lib/queue';
 import { processSendMessage } from '@/jobs/send-message';
@@ -11,7 +12,39 @@ import { processButtonReply } from '@/jobs/process-reply';
 import { scan48hReminders, scan2hReminders, scanPostVisit, scanReEngagement } from '@/jobs/scan-reminders';
 import { processVoiceEvent } from '@/jobs/process-voice-call';
 
+const SCAN_INTERVAL_MS = 15 * 60 * 1000;
+
+async function startInlineDevScheduler() {
+  const runScans = async () => {
+    try {
+      const [c48, c2, cPost] = await Promise.all([
+        scan48hReminders(),
+        scan2hReminders(),
+        scanPostVisit(),
+      ]);
+      console.log(`[worker:inline] scans done — 48h=${c48} 2h=${c2} post-visit=${cPost}`);
+    } catch (err) {
+      console.error('[worker:inline] scan failed:', err instanceof Error ? err.message : err);
+    }
+  };
+
+  await runScans();
+  setInterval(runScans, SCAN_INTERVAL_MS);
+  console.log('[worker:inline] Dev scheduler active (every 15 min, no Redis)');
+}
+
 async function main() {
+  if (!(await isRedisHostReachable())) {
+    if (useInlineQueueFallback()) {
+      console.warn('[worker] Redis host unreachable — starting inline dev scheduler');
+      await startInlineDevScheduler();
+      return;
+    }
+    throw new Error(
+      'UPSTASH_REDIS_URL host unreachable. Create a new Upstash Redis database and update .env.local.',
+    );
+  }
+
   const connection = getWorkerConnection();
   console.log('[worker] Starting messaging worker...');
 

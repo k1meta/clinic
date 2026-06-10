@@ -54,8 +54,9 @@ export async function createAppointment(input: CreateAppointmentInput) {
     }
   }
 
+  let newAppointmentId: string;
   try {
-    await db.insert(appointments).values({
+    const [row] = await db.insert(appointments).values({
       clinicId,
       patientId,
       doctorId,
@@ -68,9 +69,20 @@ export async function createAppointment(input: CreateAppointmentInput) {
       amountPaid: 0,
       paymentStatus: 'pending',
       notes: notes || null,
-    });
+    }).returning({ id: appointments.id });
+    if (!row) {
+      return { error: 'Failed to create appointment. Please try again.' };
+    }
+    newAppointmentId = row.id;
   } catch (e) {
     return { error: 'Failed to create appointment. Please try again.' };
+  }
+
+  try {
+    const { schedule48hReminderIfEligible } = await import('@/lib/schedule-48h-reminder');
+    await schedule48hReminderIfEligible({ clinicId, appointmentId: newAppointmentId });
+  } catch (e) {
+    console.error('[createAppointment] schedule48hReminderIfEligible:', e);
   }
 
   revalidatePath('/');

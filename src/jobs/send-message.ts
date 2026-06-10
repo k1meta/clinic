@@ -34,22 +34,11 @@ async function isOptedOut(patientId: string): Promise<boolean> {
 
 async function readAutomationFlags(clinicId: string, type: AutomationTypeName) {
   const [a] = await db
-    .select({
-      isEnabled: automations.isEnabled,
-      quietHoursStart: automations.quietHoursStart,
-      quietHoursEnd: automations.quietHoursEnd,
-    })
+    .select({ isEnabled: automations.isEnabled })
     .from(automations)
     .where(and(eq(automations.clinicId, clinicId), eq(automations.type, type)))
     .limit(1);
   return a ?? null;
-}
-
-function isLocalQuietHour(flags: { quietHoursStart: number; quietHoursEnd: number }): boolean {
-  const hour = new Date().getHours();
-  const { quietHoursStart: start, quietHoursEnd: end } = flags;
-  if (start > end) return hour >= start || hour < end;
-  return hour >= start && hour < end;
 }
 
 export async function processSendMessage(data: SendMessageJobData) {
@@ -96,6 +85,23 @@ export async function processSendMessage(data: SendMessageJobData) {
     const flags48 = await readAutomationFlags(clinicId, 'reminder_48h');
     if (!flags48?.isEnabled) {
       console.log('Skipping reminder_48h: automation disabled for clinic', clinicId);
+      return;
+    }
+
+    const [alreadySent] = await db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.appointmentId, appointmentId),
+          eq(messages.type, 'reminder_48h'),
+          eq(messages.direction, 'outbound'),
+          inArray(messages.status, ['queued', 'sent', 'delivered', 'read']),
+        ),
+      )
+      .limit(1);
+    if (alreadySent) {
+      console.log('Skipping reminder_48h: already sent for appointment', appointmentId);
       return;
     }
 
@@ -162,10 +168,6 @@ export async function processSendMessage(data: SendMessageJobData) {
     const flagsRv = await readAutomationFlags(clinicId, 'review_request');
     if (!flagsRv?.isEnabled) {
       console.log('Skipping review_request: automation disabled', clinicId);
-      return;
-    }
-    if (isLocalQuietHour(flagsRv)) {
-      console.log('Skipping review_request: quiet hours', clinicId);
       return;
     }
 

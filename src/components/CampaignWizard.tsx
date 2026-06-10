@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import {
   createCampaign,
   launchCampaign,
@@ -17,13 +17,20 @@ type CampaignRow = {
   createdAt: Date;
 };
 
+type AudiencePreview = {
+  count: number;
+  members: { id: string; fullName: string }[];
+};
+
 type Props = {
   campaigns: CampaignRow[];
 };
 
 export default function CampaignWizard({ campaigns }: Props) {
   const [isPending, startTransition] = useTransition();
-  const [preview, setPreview] = useState<{ count: number; sample: string[] } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [preview, setPreview] = useState<AudiencePreview | null>(null);
   const [form, setForm] = useState({
     name: '',
     channel: 'whatsapp' as 'whatsapp' | 'sms' | 'email',
@@ -32,6 +39,10 @@ export default function CampaignWizard({ campaigns }: Props) {
     hasEmail: false,
     hasPhone: true,
   });
+
+  useEffect(() => {
+    setPreview(null);
+  }, [form.inactiveDays, form.hasEmail, form.hasPhone, form.channel]);
 
   function buildSegmentFilter() {
     const filter: Record<string, unknown> = {};
@@ -49,6 +60,8 @@ export default function CampaignWizard({ campaigns }: Props) {
   }
 
   function handleCreate(andLaunch: boolean) {
+    setActionError(null);
+    setActionNotice(null);
     startTransition(async () => {
       const res = await createCampaign({
         name: form.name,
@@ -56,16 +69,38 @@ export default function CampaignWizard({ campaigns }: Props) {
         templateContent: form.templateContent,
         segmentFilter: buildSegmentFilter(),
       });
+      if ('error' in res && res.error) {
+        setActionError(res.error);
+        return;
+      }
       if (res.success && res.id) {
-        if (andLaunch) await launchCampaign(res.id);
+        if (andLaunch) {
+          const launchRes = await launchCampaign(res.id);
+          if ('error' in launchRes && launchRes.error) {
+            setActionError(launchRes.error);
+            return;
+          }
+          if ('warning' in launchRes && launchRes.warning) {
+            setActionNotice(launchRes.warning);
+          }
+        }
         window.location.reload();
       }
     });
   }
 
   function handleLaunch(id: string) {
+    setActionError(null);
+    setActionNotice(null);
     startTransition(async () => {
-      await launchCampaign(id);
+      const launchRes = await launchCampaign(id);
+      if ('error' in launchRes && launchRes.error) {
+        setActionError(launchRes.error);
+        return;
+      }
+      if ('warning' in launchRes && launchRes.warning) {
+        setActionNotice(launchRes.warning);
+      }
       window.location.reload();
     });
   }
@@ -132,10 +167,29 @@ export default function CampaignWizard({ campaigns }: Props) {
         </div>
 
         {preview && (
-          <p className="text-sm text-on-surface-variant">
-            Audience: <strong>{preview.count}</strong> patients
-            {preview.sample.length > 0 && ` (e.g. ${preview.sample.join(', ')})`}
-          </p>
+          <div className="rounded-xl border border-surface-container-high bg-surface-container-low/40 p-4 space-y-2">
+            <p className="text-sm font-semibold text-on-surface">
+              Audience preview — {preview.count} {preview.count === 1 ? 'patient' : 'patients'}
+            </p>
+            {preview.count === 0 ? (
+              <p className="text-sm text-on-surface-variant">No patients match these filters.</p>
+            ) : (
+              <ul className="max-h-48 overflow-y-auto space-y-1 text-sm text-on-surface-variant">
+                {preview.members.map((member) => (
+                  <li key={member.id} className="py-0.5">
+                    {member.fullName}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {actionError && (
+          <p className="text-sm text-red-400 font-medium">{actionError}</p>
+        )}
+        {actionNotice && (
+          <p className="text-sm text-amber-400 font-medium">{actionNotice}</p>
         )}
 
         <div className="flex flex-wrap gap-2">
@@ -184,14 +238,16 @@ export default function CampaignWizard({ campaigns }: Props) {
                   {c.channel} · {c.status} · sent {c.sentCount} · failed {c.failedCount}
                 </p>
               </div>
-              {(c.status === 'draft' || c.status === 'scheduled') && (
+              {(c.status === 'draft' ||
+                c.status === 'scheduled' ||
+                (c.status === 'sending' && c.sentCount === 0 && c.failedCount === 0)) && (
                 <button
                   type="button"
                   onClick={() => handleLaunch(c.id)}
                   disabled={isPending}
                   className="text-sm font-semibold text-primary hover:underline disabled:opacity-60"
                 >
-                  Send now
+                  {c.status === 'sending' ? 'Retry send' : 'Send now'}
                 </button>
               )}
             </div>

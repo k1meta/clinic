@@ -103,8 +103,28 @@ export async function updateTestPhone(input: { phone: string }) {
  * Requires the BullMQ worker (`npm run worker`) to be running; otherwise jobs
  * sit in Redis until it comes online.
  */
+async function runReminderScansInline() {
+  const { scan48hReminders, scan2hReminders, scanPostVisit } = await import('@/jobs/scan-reminders');
+  const [c48, c2, cPost] = await Promise.all([
+    scan48hReminders(),
+    scan2hReminders(),
+    scanPostVisit(),
+  ]);
+  return { c48, c2, cPost };
+}
+
 export async function runReminderScanNow() {
   await requireAdmin();
+  const { isRedisHostReachable, useInlineQueueFallback } = await import('@/lib/redis-health');
+
+  if (!(await isRedisHostReachable()) && useInlineQueueFallback()) {
+    const { c48, c2, cPost } = await runReminderScansInline();
+    return {
+      success: true,
+      message: `Redis offline — ran inline scan: ${c48}×48h, ${c2}×2h, ${cPost}×post-visit processed.`,
+    };
+  }
+
   try {
     const { getSchedulerQueue } = await import('@/lib/queue');
     const queue = getSchedulerQueue();
@@ -114,6 +134,13 @@ export async function runReminderScanNow() {
     return { success: true, message: 'Reminder scan queued. Check the worker log for matches.' };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
+    if (useInlineQueueFallback()) {
+      const { c48, c2, cPost } = await runReminderScansInline();
+      return {
+        success: true,
+        message: `Redis enqueue failed — ran inline scan: ${c48}×48h, ${c2}×2h, ${cPost}×post-visit processed.`,
+      };
+    }
     return { error: 'Failed to enqueue scan: ' + msg };
   }
 }

@@ -1,5 +1,6 @@
 import { Queue } from 'bullmq';
 import { getQueueConnection } from './redis';
+import { useInlineQueueFallback } from './redis-health';
 
 // --- Job data types ---
 
@@ -84,16 +85,43 @@ export type AddSendMessageJobOptions = {
   delay?: number;
 };
 
+async function runSendMessageInline(data: SendMessageJobData, delayMs?: number) {
+  const { processSendMessage } = await import('@/jobs/send-message');
+  if (typeof delayMs === 'number' && delayMs > 0) {
+    setTimeout(() => {
+      processSendMessage(data).catch((err) => {
+        console.error('[queue:inline] delayed send-message failed:', err);
+      });
+    }, delayMs);
+    return { id: `inline-delayed-${Date.now()}` };
+  }
+  await processSendMessage(data);
+  return { id: `inline-${Date.now()}` };
+}
+
 export async function addSendMessageJob(data: SendMessageJobData, options?: AddSendMessageJobOptions) {
-  const queue = getMessagingQueue();
   const delay = options?.delay;
-  return queue.add('send-message', data, {
+  const jobOpts = {
     attempts: 3,
     backoff: { type: 'exponential', delay: 5000 },
     removeOnComplete: 1000,
     removeOnFail: 5000,
     ...(typeof delay === 'number' && delay > 0 ? { delay } : {}),
-  });
+  };
+
+  try {
+    const queue = getMessagingQueue();
+    return await Promise.race([
+      queue.add('send-message', data, jobOpts),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Redis enqueue timed out after 5000ms')), 5_000);
+      }),
+    ]);
+  } catch (err) {
+    if (!useInlineQueueFallback()) throw err;
+    console.warn('[queue] Redis unavailable — processing send-message inline');
+    return runSendMessageInline(data, delay);
+  }
 }
 
 export async function addProcessReplyJob(data: ProcessReplyJobData) {
@@ -120,6 +148,22 @@ export async function addSendCampaignJob(data: SendCampaignJobData) {
     removeOnComplete: 1000,
     removeOnFail: 5000,
   });
+}
+
+/** Enqueue with timeout so server actions do not hang when Redis is unreachable. */
+export async function addSendCampaignJobWithTimeout(
+  data: SendCampaignJobData,
+  timeoutMs = 4_000,
+) {
+  await Promise.race([
+    addSendCampaignJob(data),
+    new Promise<never>((_, reject) => {
+      setTimeout(
+        () => reject(new Error(`Redis enqueue timed out after ${timeoutMs}ms`)),
+        timeoutMs,
+      );
+    }),
+  ]);
 }
 
 export async function addVoiceEventJob(data: VoiceEventJobData) {

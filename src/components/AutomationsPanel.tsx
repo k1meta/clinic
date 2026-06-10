@@ -4,7 +4,6 @@ import { useState, useTransition } from 'react';
 import {
   toggleAutomation,
   updateAutomationTemplate,
-  updateQuietHours,
   updateAutomationChannel,
 } from '@/app/actions/automations';
 import type { AutomationTypeName } from '@/db/schema/automations';
@@ -15,8 +14,6 @@ export type AutomationRow = {
   isEnabled: boolean;
   channel: string;
   templateContent: string;
-  quietHoursStart: number;
-  quietHoursEnd: number;
 };
 
 const AUTOMATION_META: Record<
@@ -61,13 +58,6 @@ const CHANNEL_OPTIONS = [
   { value: 'sms,email', label: 'SMS → Email cascade' },
 ];
 
-function formatHour(h: number) {
-  if (h === 0) return '12:00 AM';
-  if (h < 12) return `${h}:00 AM`;
-  if (h === 12) return '12:00 PM';
-  return `${h - 12}:00 PM`;
-}
-
 export default function AutomationsPanel({ automations }: { automations: AutomationRow[] }) {
   const [rows, setRows] = useState(automations);
   const [isPending, startTransition] = useTransition();
@@ -97,16 +87,6 @@ export default function AutomationsPanel({ automations }: { automations: Automat
   function handleTemplateSave(id: string, templateContent: string) {
     startTransition(async () => {
       await updateAutomationTemplate(id, templateContent);
-      flash(id);
-    });
-  }
-
-  function handleQuietHoursSave(id: string, start: number, end: number) {
-    setRows((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, quietHoursStart: start, quietHoursEnd: end } : r)),
-    );
-    startTransition(async () => {
-      await updateQuietHours(id, start, end);
       flash(id);
     });
   }
@@ -167,43 +147,6 @@ export default function AutomationsPanel({ automations }: { automations: Automat
                       Meta-approved WhatsApp template required for this funnel.
                     </p>
                   )}
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Quiet hours
-                  </label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <select
-                      value={row.quietHoursStart}
-                      onChange={(e) =>
-                        handleQuietHoursSave(row.id, Number(e.target.value), row.quietHoursEnd)
-                      }
-                      disabled={isPending}
-                      className="form-control flex-1"
-                    >
-                      {Array.from({ length: 24 }, (_, i) => (
-                        <option key={i} value={i}>
-                          {formatHour(i)}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="text-on-surface-variant text-xs">to</span>
-                    <select
-                      value={row.quietHoursEnd}
-                      onChange={(e) =>
-                        handleQuietHoursSave(row.id, row.quietHoursStart, Number(e.target.value))
-                      }
-                      disabled={isPending}
-                      className="form-control flex-1"
-                    >
-                      {Array.from({ length: 24 }, (_, i) => (
-                        <option key={i} value={i}>
-                          {formatHour(i)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
               </div>
 

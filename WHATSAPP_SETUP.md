@@ -131,10 +131,7 @@ npm run db:seed
 2. Use a patient who has **no** other `completed` appointments in the DB (or create a new patient).
 3. Create an appointment, then mark it **Completed** from the calendar/status menu.
 4. After the delay (5–10 min after scheduled end, minimum ~30 s), the worker should
-   call the Cloud API with template `google_review_first_visit`. If the job runs
-   during **quiet hours** (default 21:00–08:00 for that automation), the send is
-   skipped and logged — adjust hours in the `automations` row or try again outside
-   quiet hours.
+   call the Cloud API with template `google_review_first_visit`.
 5. Mark a **second** completed appointment for the same patient: no second review
    message should be sent.
 

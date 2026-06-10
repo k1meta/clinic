@@ -45,24 +45,6 @@ async function isOptedOut(patientId: string): Promise<boolean> {
   return !!p?.optOutAt;
 }
 
-/** Check if current time is within quiet hours for the given automation type. */
-async function isQuietHours(clinicId: string, type: string): Promise<boolean> {
-  const [auto] = await db
-    .select({ quietHoursStart: automations.quietHoursStart, quietHoursEnd: automations.quietHoursEnd })
-    .from(automations)
-    .where(and(eq(automations.clinicId, clinicId), eq(automations.type, type as AutomationTypeName)))
-    .limit(1);
-
-  if (!auto) return false;
-
-  const now = new Date();
-  const hour = now.getHours();
-  if (auto.quietHoursStart > auto.quietHoursEnd) {
-    return hour >= auto.quietHoursStart || hour < auto.quietHoursEnd;
-  }
-  return hour >= auto.quietHoursStart && hour < auto.quietHoursEnd;
-}
-
 /** Check if the automation is enabled for this clinic. */
 async function isAutomationEnabled(clinicId: string, type: string): Promise<boolean> {
   const [auto] = await db
@@ -131,9 +113,6 @@ export async function sendMessage(params: SendParams): Promise<{ id: string } | 
   if (!params.skipAutomationChecks && automatedTypes.includes(params.type)) {
     if (!(await isAutomationEnabled(params.clinicId, params.type))) {
       return { skipped: 'automation_disabled' };
-    }
-    if (await isQuietHours(params.clinicId, params.type)) {
-      return { skipped: 'quiet_hours' };
     }
   }
 

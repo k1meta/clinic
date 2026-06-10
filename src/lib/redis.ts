@@ -9,9 +9,13 @@ function createConnection(overrides?: Record<string, unknown>) {
   });
 }
 
-/** Connection for BullMQ Queue (producers). Uses default maxRetriesPerRequest. */
+/** Connection for BullMQ Queue (producers). Fail fast so server actions do not hang. */
 export function getQueueConnection() {
-  return createConnection();
+  return createConnection({
+    maxRetriesPerRequest: 3,
+    connectTimeout: 5_000,
+    enableOfflineQueue: false,
+  });
 }
 
 /** Connection for BullMQ Worker (consumers). Requires maxRetriesPerRequest: null. */

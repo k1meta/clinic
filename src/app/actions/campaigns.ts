@@ -6,7 +6,8 @@ import { campaigns, campaignRecipients } from '@/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { requireAdmin } from '@/db/queries/auth';
 import { parseSegmentFilter, resolveSegmentPatients } from '@/lib/campaigns/segments';
-import { addSendCampaignJob } from '@/lib/queue';
+import { addSendCampaignJobWithTimeout } from '@/lib/queue';
+import { processSendCampaign } from '@/jobs/send-campaign';
 import { revalidatePath } from 'next/cache';
 
 const createSchema = z.object({
@@ -30,7 +31,8 @@ export async function previewCampaignAudience(segmentFilter: Record<string, unkn
   const { clinicId } = await requireAdmin();
   const filter = parseSegmentFilter(segmentFilter);
   const patients = await resolveSegmentPatients(clinicId, filter);
-  return { count: patients.length, sample: patients.slice(0, 5).map((p) => p.fullName) };
+  const members = patients.map((p) => ({ id: p.id, fullName: p.fullName }));
+  return { count: members.length, members };
 }
 
 export async function createCampaign(input: z.infer<typeof createSchema>) {
@@ -58,12 +60,14 @@ export async function createCampaign(input: z.infer<typeof createSchema>) {
     })
     .returning({ id: campaigns.id });
 
-  for (const p of audience) {
-    await db.insert(campaignRecipients).values({
-      campaignId: campaign.id,
-      patientId: p.id,
-      status: 'pending',
-    });
+  if (audience.length > 0) {
+    await db.insert(campaignRecipients).values(
+      audience.map((p) => ({
+        campaignId: campaign.id,
+        patientId: p.id,
+        status: 'pending' as const,
+      })),
+    );
   }
 
   revalidatePath('/campaigns');
@@ -80,8 +84,13 @@ export async function launchCampaign(campaignId: string) {
     .limit(1);
 
   if (!campaign) return { error: 'Campaign not found' };
-  if (campaign.status === 'completed' || campaign.status === 'sending') {
-    return { error: 'Campaign already launched' };
+  if (campaign.status === 'completed') {
+    return { error: 'Campaign already completed' };
+  }
+  const stuckSending =
+    campaign.status === 'sending' && campaign.sentCount === 0 && campaign.failedCount === 0;
+  if (campaign.status === 'sending' && !stuckSending) {
+    return { error: 'Campaign is already sending' };
   }
 
   await db
@@ -89,7 +98,43 @@ export async function launchCampaign(campaignId: string) {
     .set({ status: 'sending', updatedAt: new Date() })
     .where(eq(campaigns.id, campaignId));
 
-  await addSendCampaignJob({ campaignId, clinicId });
+  const useQueue =
+    process.env.NODE_ENV === 'production' || process.env.CAMPAIGN_USE_QUEUE === 'true';
+
+  if (!useQueue) {
+    try {
+      await processSendCampaign({ campaignId, clinicId });
+      revalidatePath('/campaigns');
+      return {
+        success: true,
+        inline: true,
+        warning: 'Dev mode: campaign sent directly (no Redis queue). Set CAMPAIGN_USE_QUEUE=true to use worker.',
+      };
+    } catch (inlineErr) {
+      const inlineMsg = inlineErr instanceof Error ? inlineErr.message : 'Direct send failed';
+      await db
+        .update(campaigns)
+        .set({ status: 'draft', updatedAt: new Date() })
+        .where(eq(campaigns.id, campaignId));
+      return { error: inlineMsg };
+    }
+  }
+
+  try {
+    await addSendCampaignJobWithTimeout({ campaignId, clinicId });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown queue error';
+
+    await db
+      .update(campaigns)
+      .set({ status: 'draft', updatedAt: new Date() })
+      .where(eq(campaigns.id, campaignId));
+    return {
+      error:
+        'Could not queue campaign. Check UPSTASH_REDIS_URL and ensure npm run worker is running. ' +
+        msg,
+    };
+  }
 
   revalidatePath('/campaigns');
   return { success: true };

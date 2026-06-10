@@ -9,6 +9,37 @@ import { handleInboundMessage, type ConvState } from '@/lib/ai/conversation';
 import { matchWhatsAppPatient } from '@/lib/ai/patient-matcher';
 import { sendTextMessage, sendSlotList } from '@/lib/channels/whatsapp';
 
+type ReminderAction = 'confirm' | 'cancel' | 'reschedule';
+
+function parseReminderButtonPayload(
+  raw: string | undefined,
+): { action: ReminderAction; appointmentId: string } | null {
+  if (!raw) return null;
+  const colon = raw.indexOf(':');
+  if (colon <= 0) return null;
+  const action = raw.slice(0, colon);
+  const appointmentId = raw.slice(colon + 1);
+  if (!['confirm', 'cancel', 'reschedule'].includes(action) || !appointmentId) return null;
+  return { action: action as ReminderAction, appointmentId };
+}
+
+async function handleReminderButtonReply(params: {
+  clinicId: string;
+  phone: string;
+  action: ReminderAction;
+  appointmentId: string;
+}) {
+  const { clinicId, phone, action, appointmentId } = params;
+  const patient = await matchWhatsAppPatient(clinicId, phone);
+  if (!patient) return;
+  await addProcessReplyJob({
+    clinicId,
+    patientId: patient.id,
+    appointmentId,
+    action,
+  });
+}
+
 function verifySignature(body: string, signature: string): boolean {
   const appSecret = process.env.META_APP_SECRET;
   if (!appSecret) return true;
@@ -75,23 +106,33 @@ export async function POST(request: NextRequest) {
           const phone = msg.from as string | undefined;
           if (!phone) continue;
 
-          // Interactive button reply (reminder confirm/cancel/reschedule flow)
+          // Template quick-reply (48 h reminder): type "button" + button.payload
+          if (msg.type === 'button') {
+            const templateBtn = msg.button as { payload?: string; text?: string } | undefined;
+            const parsed = parseReminderButtonPayload(templateBtn?.payload);
+            if (parsed) {
+              await handleReminderButtonReply({
+                clinicId,
+                phone,
+                action: parsed.action,
+                appointmentId: parsed.appointmentId,
+              });
+              continue;
+            }
+          }
+
+          // Interactive button reply (non-template flows)
           const interactive = msg.interactive as Record<string, unknown> | undefined;
           if (msg.type === 'interactive' && interactive?.type === 'button_reply') {
             const buttonReply = interactive.button_reply as { id: string; title: string };
-            const parts = buttonReply.id.split(':');
-            const action = parts[0];
-            const appointmentId = parts[1];
-            if (['confirm', 'cancel', 'reschedule'].includes(action) && appointmentId) {
-              const patient = await matchWhatsAppPatient(clinicId, phone);
-              if (patient) {
-                await addProcessReplyJob({
-                  clinicId,
-                  patientId: patient.id,
-                  appointmentId,
-                  action: action as 'confirm' | 'cancel' | 'reschedule',
-                });
-              }
+            const parsed = parseReminderButtonPayload(buttonReply.id);
+            if (parsed) {
+              await handleReminderButtonReply({
+                clinicId,
+                phone,
+                action: parsed.action,
+                appointmentId: parsed.appointmentId,
+              });
             }
             continue;
           }

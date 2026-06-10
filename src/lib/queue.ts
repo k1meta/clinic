@@ -125,11 +125,26 @@ export async function addSendMessageJob(data: SendMessageJobData, options?: AddS
 }
 
 export async function addProcessReplyJob(data: ProcessReplyJobData) {
-  const queue = getMessagingQueue();
-  return queue.add('process-reply', data, {
+  const jobOpts = {
     attempts: 3,
-    backoff: { type: 'exponential', delay: 3000 },
-  });
+    backoff: { type: 'exponential' as const, delay: 3000 },
+  };
+
+  try {
+    const queue = getMessagingQueue();
+    return await Promise.race([
+      queue.add('process-reply', data, jobOpts),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Redis enqueue timed out after 5000ms')), 5_000);
+      }),
+    ]);
+  } catch (err) {
+    if (!useInlineQueueFallback()) throw err;
+    console.warn('[queue] Redis unavailable — processing process-reply inline');
+    const { processButtonReply } = await import('@/jobs/process-reply');
+    await processButtonReply(data);
+    return { id: `inline-process-reply-${Date.now()}` };
+  }
 }
 
 export async function addRescheduleSelectionJob(data: RescheduleSelectionJobData) {

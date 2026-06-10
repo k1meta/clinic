@@ -7,11 +7,12 @@ import { eq, and, sql } from 'drizzle-orm';
 import { checkNoOverlap } from '@/lib/availability';
 import { getClinicId } from '@/db/queries/auth';
 import { revalidatePath } from 'next/cache';
+import { optionalPostgresUuid, postgresUuid } from '@/lib/postgres-uuid';
 
 const createAppointmentSchema = z.object({
-  patientId: z.string().uuid(),
-  doctorId: z.string().uuid(),
-  treatmentTypeId: z.string().uuid().optional(),
+  patientId: postgresUuid(),
+  doctorId: postgresUuid(),
+  treatmentTypeId: optionalPostgresUuid(),
   date: z.string().min(1),
   time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Invalid time format (HH:MM)'),
   durationMin: z.number().min(5).max(480),
@@ -80,9 +81,13 @@ export async function createAppointment(input: CreateAppointmentInput) {
 
   try {
     const { schedule48hReminderIfEligible } = await import('@/lib/schedule-48h-reminder');
-    await schedule48hReminderIfEligible({ clinicId, appointmentId: newAppointmentId });
+    const { schedule2hReminderIfEligible } = await import('@/lib/schedule-2h-reminder');
+    await Promise.all([
+      schedule48hReminderIfEligible({ clinicId, appointmentId: newAppointmentId }),
+      schedule2hReminderIfEligible({ clinicId, appointmentId: newAppointmentId }),
+    ]);
   } catch (e) {
-    console.error('[createAppointment] schedule48hReminderIfEligible:', e);
+    console.error('[createAppointment] schedule reminders:', e);
   }
 
   revalidatePath('/');

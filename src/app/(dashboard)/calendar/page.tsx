@@ -19,7 +19,6 @@ const STATUS_STYLES: Record<string, { bg: string; border: string; textColor: str
   arrived:   { bg: "bg-secondary-fixed", border: "border-secondary", textColor: "text-on-secondary-fixed-variant", badge: "Arrived", badgeBg: "bg-green-500/15 text-green-400" },
   completed: { bg: "bg-surface-container-high", border: "border-outline-variant", textColor: "text-on-surface-variant" },
   no_show:   { bg: "bg-error/10", border: "border-error", textColor: "text-error" },
-  cancelled: { bg: "bg-surface-container-high", border: "border-outline-variant/50", textColor: "text-outline" },
 };
 
 function formatDateParam(d: Date) {

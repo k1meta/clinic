@@ -54,11 +54,14 @@ export async function scan48hReminders() {
   return rows.length;
 }
 
-/** Scan for appointments needing 2h SMS nudge (no WhatsApp confirmation received). */
+/**
+ * Backup scan for missed 2 h SMS nudges only.
+ * Primary path: `schedule2hReminderIfEligible` fires at exactly T−2 h on booking.
+ * Catches appointments whose send time passed but no SMS went out (and no WhatsApp confirm).
+ */
 export async function scan2hReminders() {
   const now = new Date();
-  const from = new Date(now.getTime() + 1.5 * 60 * 60 * 1000);
-  const to = new Date(now.getTime() + 2.5 * 60 * 60 * 1000);
+  const sendTimePassedBefore = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
   const rows = await db
     .select({
@@ -70,8 +73,8 @@ export async function scan2hReminders() {
     .where(
       and(
         ne(appointments.status, 'cancelled'),
-        gte(appointments.startsAt, from),
-        lte(appointments.startsAt, to),
+        gte(appointments.startsAt, now),
+        lte(appointments.startsAt, sendTimePassedBefore),
         // No confirmation received
         notExists(
           db.select({ x: sql`1` })

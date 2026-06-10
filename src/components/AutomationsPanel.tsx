@@ -28,7 +28,7 @@ const AUTOMATION_META: Record<
   },
   reminder_2h: {
     label: '2h SMS Nudge',
-    description: 'SMS fallback when the patient has not confirmed via WhatsApp within 2 hours of the appointment.',
+    description: 'SMS sent exactly 2 hours before the appointment if the patient has not confirmed via WhatsApp (Potvrdi).',
     variables: '{{patient_name}}, {{date}}, {{time}}, {{doctor}}',
   },
   post_visit: {

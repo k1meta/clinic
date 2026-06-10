@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { db } from '@/db';
 import { appointments, doctors, patients, messages } from '@/db/schema';
 import { eq } from 'drizzle-orm';
@@ -5,6 +6,12 @@ import { sendMessage } from '@/lib/messaging';
 import { getNextAvailableSlots } from '@/lib/availability';
 import { generateConfirmation, generateCancellationAck, generateRescheduleOptions } from '@/lib/ai/messaging';
 import type { ProcessReplyJobData } from '@/lib/queue';
+
+function revalidateAppointmentViews() {
+  revalidatePath('/');
+  revalidatePath('/calendar');
+  revalidatePath('/patients');
+}
 
 export async function processButtonReply(data: ProcessReplyJobData) {
   const { clinicId, patientId, appointmentId, action } = data;
@@ -68,6 +75,8 @@ export async function processButtonReply(data: ProcessReplyJobData) {
       content: 'Potvrdio/la dolazak',
     });
 
+    revalidateAppointmentViews();
+
   } else if (action === 'cancel') {
     await db
       .update(appointments)
@@ -84,6 +93,8 @@ export async function processButtonReply(data: ProcessReplyJobData) {
       type: 'cancellation',
       content,
     });
+
+    revalidateAppointmentViews();
 
   } else if (action === 'reschedule') {
     // Find available slots
@@ -103,5 +114,7 @@ export async function processButtonReply(data: ProcessReplyJobData) {
       content,
       metadata: { slots, oldAppointmentId: appointmentId, doctorId: apt.doctorId },
     });
+
+    revalidateAppointmentViews();
   }
 }

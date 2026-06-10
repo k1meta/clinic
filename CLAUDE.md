@@ -127,7 +127,7 @@ All tables include `clinic_id` (UUID, FK to clinics), `created_at`, `updated_at`
 | `doctors` | Clinic practitioners (specialty, schedule JSONB) |
 | `treatment_types` | Treatment catalogue (name, duration, recurring flag) |
 | `messages` | Full communication log (channel, direction, status) |
-| `automations` | Automation configs (type, template, quiet hours) |
+| `automations` | Automation configs (type, template, channel) |
 | `calls` | Voice AI call log (transcript, outcome, summary) |
 | `reviews` | Google reviews (rating, reply_draft, posted status) |
 | `alerts` | Dashboard alert feed (type, severity, related record) |

@@ -244,6 +244,61 @@ export async function processSendMessage(data: SendMessageJobData) {
     return;
   }
 
+  if (type === 'reminder_2h' && appointmentId) {
+    if (await isOptedOut(patientId)) {
+      console.log('Skipping reminder_2h: patient opted out', patientId);
+      return;
+    }
+    const flags2h = await readAutomationFlags(clinicId, 'reminder_2h');
+    if (!flags2h?.isEnabled) {
+      console.log('Skipping reminder_2h: automation disabled for clinic', clinicId);
+      return;
+    }
+
+    const [apt2h] = await db
+      .select({ status: appointments.status })
+      .from(appointments)
+      .where(eq(appointments.id, appointmentId))
+      .limit(1);
+    if (!apt2h || apt2h.status === 'cancelled') {
+      console.log('Skipping reminder_2h: appointment cancelled or missing', appointmentId);
+      return;
+    }
+
+    const [confirmed] = await db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.appointmentId, appointmentId),
+          eq(messages.type, 'confirmation'),
+          eq(messages.direction, 'inbound'),
+        ),
+      )
+      .limit(1);
+    if (confirmed) {
+      console.log('Skipping reminder_2h: patient already confirmed', appointmentId);
+      return;
+    }
+
+    const [alreadySent2h] = await db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.appointmentId, appointmentId),
+          eq(messages.type, 'reminder_2h'),
+          eq(messages.direction, 'outbound'),
+          inArray(messages.status, ['queued', 'sent', 'delivered', 'read']),
+        ),
+      )
+      .limit(1);
+    if (alreadySent2h) {
+      console.log('Skipping reminder_2h: already sent for appointment', appointmentId);
+      return;
+    }
+  }
+
   const [clinicRow] = await db
     .select({ name: clinics.name })
     .from(clinics)

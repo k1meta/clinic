@@ -43,7 +43,8 @@ export async function getAppointmentsByDate(clinicId: string, date: Date) {
       and(
         eq(appointments.clinicId, clinicId),
         gte(appointments.startsAt, startOfDay),
-        lte(appointments.startsAt, endOfDay)
+        lte(appointments.startsAt, endOfDay),
+        ne(appointments.status, 'cancelled'),
       )
     )
     .orderBy(appointments.startsAt);

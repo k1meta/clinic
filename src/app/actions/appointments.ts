@@ -109,6 +109,12 @@ export async function updateAppointmentStatus(id: string, status: string, cancel
     return { error: parsed.error.issues.map(e => e.message).join(', ') };
   }
 
+  const [existingAppt] = await db
+    .select({ treatmentTypeId: appointments.treatmentTypeId, startsAt: appointments.startsAt })
+    .from(appointments)
+    .where(and(eq(appointments.id, id), eq(appointments.clinicId, clinicId)))
+    .limit(1);
+
   await db
     .update(appointments)
     .set({
@@ -124,6 +130,21 @@ export async function updateAppointmentStatus(id: string, status: string, cancel
       await scheduleReviewRequestIfEligible({ clinicId, appointmentId: id });
     } catch (e) {
       console.error('[updateAppointmentStatus] scheduleReviewRequestIfEligible:', e);
+    }
+  }
+
+  if (parsed.data.status === 'cancelled' && existingAppt) {
+    try {
+      const { notifyWaitlistSlotOpened } = await import('@/lib/waitlist/notify');
+      const d = new Date(existingAppt.startsAt);
+      await notifyWaitlistSlotOpened({
+        clinicId,
+        treatmentTypeId: existingAppt.treatmentTypeId,
+        date: d.toISOString().slice(0, 10),
+        time: d.toTimeString().slice(0, 5),
+      });
+    } catch (e) {
+      console.error('[updateAppointmentStatus] notifyWaitlistSlotOpened:', e);
     }
   }
 

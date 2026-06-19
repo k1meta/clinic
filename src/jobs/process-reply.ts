@@ -21,6 +21,7 @@ export async function processButtonReply(data: ProcessReplyJobData) {
     .select({
       startsAt: appointments.startsAt,
       doctorId: appointments.doctorId,
+      treatmentTypeId: appointments.treatmentTypeId,
       status: appointments.status,
     })
     .from(appointments)
@@ -96,6 +97,19 @@ export async function processButtonReply(data: ProcessReplyJobData) {
       type: 'cancellation',
       content,
     });
+
+    try {
+      const { notifyWaitlistSlotOpened } = await import('@/lib/waitlist/notify');
+      const d = new Date(apt.startsAt);
+      await notifyWaitlistSlotOpened({
+        clinicId,
+        treatmentTypeId: apt.treatmentTypeId,
+        date: d.toISOString().slice(0, 10),
+        time: d.toTimeString().slice(0, 5),
+      });
+    } catch (e) {
+      console.error('[processButtonReply] notifyWaitlistSlotOpened:', e);
+    }
 
     revalidateAppointmentViews();
 

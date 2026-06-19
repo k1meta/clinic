@@ -6,9 +6,11 @@ import { getDoctorsByClinic } from "@/db/queries/doctors";
 import { getTreatmentTypesByClinic } from "@/db/queries/treatment-types";
 import { getAllPatients } from "@/db/queries/patients";
 import { getClinicSettings } from "@/db/queries/clinics";
+import { getActiveWaitlist } from "@/db/queries/waiting-list";
 import AppointmentModal from "@/components/AppointmentModal";
 import AppointmentStatusMenu from "@/components/AppointmentStatusMenu";
 import CalendarDatePicker from "@/components/CalendarDatePicker";
+import WaitlistPanel from "@/components/WaitlistPanel";
 import Link from "next/link";
 
 const ROW_HEIGHT_PX = 96;
@@ -61,12 +63,13 @@ export default async function CalendarPage({
   const nextDate = new Date(selectedDate);
   nextDate.setDate(nextDate.getDate() + 1);
 
-  const [appointmentsRaw, doctors, treatmentTypes, patientsList, settings] = await Promise.all([
+  const [appointmentsRaw, doctors, treatmentTypes, patientsList, settings, waitlist] = await Promise.all([
     getAppointmentsByDate(clinicId, selectedDate),
     getDoctorsByClinic(clinicId),
     getTreatmentTypesByClinic(clinicId),
     getAllPatients(clinicId),
     getClinicSettings(clinicId),
+    getActiveWaitlist(clinicId),
   ]);
 
   const dateLabel = selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
@@ -250,20 +253,11 @@ export default async function CalendarPage({
 
         {/* Waiting List Sidebar */}
         <aside className="w-80 bg-surface-container-low border-l border-outline-variant/10 p-6 overflow-y-auto no-scrollbar hidden lg:block">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">Waiting List</h3>
-            <span className="bg-surface-container-high text-on-surface-variant text-[10px] font-black px-2 py-0.5 rounded-full">0</span>
-          </div>
-          <p className="text-sm text-on-surface-variant text-center py-8">No patients on the waiting list.</p>
-          <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 mt-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="material-symbols-outlined text-primary text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
-              <span className="text-xs font-bold text-primary">AI Intelligence</span>
-            </div>
-            <p className="text-[11px] text-on-surface-variant leading-relaxed">
-              Waiting list automation will suggest optimal slot fills when cancellations occur.
-            </p>
-          </div>
+          <WaitlistPanel
+            entries={waitlist}
+            patients={patientsList}
+            treatmentTypes={treatmentTypes}
+          />
         </aside>
       </div>
     </div>

@@ -14,6 +14,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:migrate-review-enums": "tsx --env-file=.env.local scripts/migrate-review-request-enums.ts",
     "db:migrate-engagement": "tsx --env-file=.env.local scripts/migrate-engagement-suite.ts",
+    "db:migrate-waitlist": "tsx --env-file=.env.local scripts/migrate-waitlist.ts",
     "db:migrate-user-roles": "tsx --env-file=.env.local scripts/migrate-user-roles.ts",
     "db:bootstrap-admin": "tsx --env-file=.env.local scripts/bootstrap-admin.ts",
     "worker": "tsx src/worker.ts",

@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { sendMessage } from '@/lib/messaging';
 import { getNextAvailableSlots } from '@/lib/availability';
 import { generateConfirmation, generateCancellationAck, generateRescheduleOptions } from '@/lib/ai/messaging';
+import { getClinicSettings } from '@/db/queries/clinics';
 import type { ProcessReplyJobData } from '@/lib/queue';
 
 function revalidateAppointmentViews() {
@@ -42,6 +43,8 @@ export async function processButtonReply(data: ProcessReplyJobData) {
     .where(eq(doctors.id, apt.doctorId))
     .limit(1);
 
+  const { vertical } = await getClinicSettings(clinicId);
+
   if (action === 'confirm') {
     // Update appointment status
     await db
@@ -52,7 +55,7 @@ export async function processButtonReply(data: ProcessReplyJobData) {
     const d = new Date(apt.startsAt);
     const date = d.toLocaleDateString('hr-HR', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const time = d.toLocaleTimeString('hr-HR', { hour: '2-digit', minute: '2-digit' });
-    const content = await generateConfirmation(patient.fullName, date, time, doctor?.fullName ?? '');
+    const content = await generateConfirmation(patient.fullName, date, time, doctor?.fullName ?? '', vertical);
 
     await sendMessage({
       clinicId,
@@ -83,7 +86,7 @@ export async function processButtonReply(data: ProcessReplyJobData) {
       .set({ status: 'cancelled', cancelledReason: 'Patient cancelled via WhatsApp', updatedAt: new Date() })
       .where(eq(appointments.id, appointmentId));
 
-    const content = await generateCancellationAck(patient.fullName);
+    const content = await generateCancellationAck(patient.fullName, vertical);
 
     await sendMessage({
       clinicId,
@@ -103,7 +106,7 @@ export async function processButtonReply(data: ProcessReplyJobData) {
     const fromDate = tomorrow.toISOString().slice(0, 10);
 
     const slots = await getNextAvailableSlots(clinicId, apt.doctorId, fromDate, 30, 5);
-    const content = await generateRescheduleOptions(patient.fullName, slots);
+    const content = await generateRescheduleOptions(patient.fullName, slots, vertical);
 
     await sendMessage({
       clinicId,

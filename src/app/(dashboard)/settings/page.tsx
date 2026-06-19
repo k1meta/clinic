@@ -17,6 +17,7 @@ import GoogleReviewUrlForm from '@/components/GoogleReviewUrlForm';
 import TeamPanel from '@/components/TeamPanel';
 import ChangeOwnPasswordForm from '@/components/ChangeOwnPasswordForm';
 import VerticalSettingsForm from '@/components/VerticalSettingsForm';
+import DepositSettingsForm from '@/components/DepositSettingsForm';
 import { redirect } from 'next/navigation';
 
 function formatHour(h: number) {
@@ -125,6 +126,29 @@ export default async function SettingsPage() {
             </div>
           </div>
           <GoogleReviewUrlForm currentUrl={settings.googleReviewUrl} />
+        </div>
+      </div>
+
+      {/* Deposits & revenue */}
+      <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden mb-8">
+        <div className="px-6 py-5">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center text-green-500">
+              <span className="material-symbols-outlined">savings</span>
+            </div>
+            <div>
+              <h2 className="font-headline font-bold text-lg text-on-surface">Deposits &amp; revenue</h2>
+              <p className="text-[11px] text-on-surface-variant">
+                Booking deposits are optional (cash by default). Set the no-show baseline used for ROI estimates.
+              </p>
+            </div>
+          </div>
+          <DepositSettingsForm
+            depositEnabled={settings.depositEnabled}
+            depositAmount={settings.depositAmount}
+            paymentGateway={settings.paymentGateway}
+            noShowBaseline={settings.noShowBaseline}
+          />
         </div>
       </div>
 

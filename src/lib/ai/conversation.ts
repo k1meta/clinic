@@ -2,6 +2,7 @@ import { db } from '@/db';
 import { messages, doctors, treatmentTypes, appointments } from '@/db/schema';
 import { eq, and, gte, desc } from 'drizzle-orm';
 import { generateResponse } from './llm';
+import { buildAssistantSystemPrompt, type BusinessVertical } from '@/lib/verticals';
 import { getAvailableSlots, getNextAvailableSlots } from '@/lib/availability';
 import type { TimeSlot } from '@/lib/availability';
 
@@ -42,6 +43,7 @@ interface ClinicContext {
   clinicName: string;
   workStart: number;
   workEnd: number;
+  vertical: BusinessVertical;
   doctors: Array<{ id: string; fullName: string; specialty: string }>;
   treatments: Array<{ id: string; name: string; durationMin: number }>;
 }
@@ -56,13 +58,6 @@ interface IntentResult {
   extractedFullName: string | null;
   slotChoiceIndex: number | null;
 }
-
-const SYSTEM_PROMPT_BASE = [
-  'Ti si profesionalni medicinski recepcioner klinike.',
-  'Komuniciras na bosanskom/srpskom/hrvatskom jeziku, ili engleskom ako ti pacijent pise na engleskom.',
-  'Budi kratak, jasan i ljubazan. Ne koristi emojije.',
-  'Koristi formalno obracanje (Vi).',
-].join(' ');
 
 async function loadClinicContext(clinicId: string): Promise<ClinicContext> {
   const { getClinicSettings } = await import('@/db/queries/clinics');
@@ -85,6 +80,7 @@ async function loadClinicContext(clinicId: string): Promise<ClinicContext> {
     clinicName: clinic?.name ?? 'Klinika',
     workStart: settings.workHours.start,
     workEnd: settings.workHours.end,
+    vertical: settings.vertical,
     doctors: doctorRows,
     treatments: treatmentRows,
   };
@@ -138,10 +134,6 @@ function findTreatment(ctx: ClinicContext, name: string | null): typeof ctx.trea
   return ctx.treatments.find(t => t.name.toLowerCase().includes(lower)) ?? null;
 }
 
-async function generateAIResponse(prompt: string): Promise<string> {
-  return generateResponse(SYSTEM_PROMPT_BASE, prompt, 200);
-}
-
 export async function handleInboundMessage(params: {
   channel: ConvChannel;
   senderId: string;
@@ -163,6 +155,8 @@ export async function handleInboundMessage(params: {
   const ctx = await loadClinicContext(clinicId);
   const today = new Date().toISOString().slice(0, 10);
   const displayName = patientName ?? 'Pacijent';
+  const sys = buildAssistantSystemPrompt(ctx.vertical);
+  const aiReply = (prompt: string) => generateResponse(sys, prompt, 200);
 
   // If patient is unknown, ask them to identify
   if (!patientId) {
@@ -174,19 +168,19 @@ export async function handleInboundMessage(params: {
         const found = await matchPatientByPhone(clinicId, intent.extractedPhone);
         if (found) {
           await linkSocialId(found.id, channel, params.senderId);
-          const reply = await generateAIResponse(
+          const reply = await aiReply(
             'Pacijent ' + found.fullName + ' se identifikovao. Pozdravi ih i pitaj sta trebaju.'
           );
           return { response: reply, nextState: { intent: 'book', step: 'awaiting_treatment' } };
         }
       }
-      const reply = await generateAIResponse(
+      const reply = await aiReply(
         'Pacijent nije pronadjen u sistemu po datom broju. Zamoli ih da nazovu kliniku ili daju puno ime i broj telefona.'
       );
       return { response: reply, nextState: emptyState };
     }
 
-    const reply = await generateAIResponse(
+    const reply = await aiReply(
       'Novi pacijent je kontaktirao kliniku. Pozdravi ih i zamoli da se identifikuju (ime i prezime te broj telefona) kako bi mogli provjeriti njihov karton.'
     );
     return { response: reply, nextState: { intent: null, step: 'awaiting_identification' } };
@@ -212,7 +206,7 @@ export async function handleInboundMessage(params: {
     if (result.error) {
       return { response: 'Doslo je do greske: ' + result.error + '. Pokusajte ponovo.', nextState: emptyState };
     }
-    const reply = await generateAIResponse(
+    const reply = await aiReply(
       'Pacijent ' + displayName + ' je potvrdio termin za ' + chosen.date + ' u ' + chosen.start + ' kod dr. ' + chosen.doctorName + '. Napisi kratku potvrdu rezervacije.'
     );
     return { response: reply, nextState: { intent: 'other', step: 'done' }, appointmentCreated: true };
@@ -227,7 +221,7 @@ export async function handleInboundMessage(params: {
     await db.update(appointments)
       .set({ status: 'cancelled', cancelledReason: 'Patient cancelled via ' + channel, updatedAt: new Date() })
       .where(eq(appointments.id, upcoming.id));
-    const reply = await generateAIResponse(
+    const reply = await aiReply(
       'Pacijent ' + displayName + ' je otkazao termin za ' + upcoming.date + ' u ' + upcoming.time + '. Potvrdi otkazivanje i pozovi ih da zakazu novi termin kada im odgovara.'
     );
     return { response: reply, nextState: emptyState };
@@ -243,7 +237,7 @@ export async function handleInboundMessage(params: {
       return { response: 'Nema slobodnih termina kod dr. ' + doctor.fullName + ' u narednih 14 dana.', nextState: emptyState };
     }
     const slotText = slots.map((s, i) => (i + 1) + '. ' + formatSlotTitle(s)).join('\n');
-    const reply = await generateAIResponse(
+    const reply = await aiReply(
       'Pacijent pita za slobodne termine kod dr. ' + doctor.fullName + '. Slobodni termini:\n' + slotText + '\nNapisi kratku poruku sa terminima i pitaj da li zele zakazati.'
     );
     return { response: reply, nextState: { intent: 'book', step: 'awaiting_time', doctorId: doctor.id, doctorName: doctor.fullName } };
@@ -270,7 +264,7 @@ export async function handleInboundMessage(params: {
     // If no treatment yet
     if (!updatedState.treatmentName && currentState?.step !== 'awaiting_doctor' && currentState?.step !== 'awaiting_time') {
       const treatmentList = ctx.treatments.map(t => t.name).join(', ');
-      const reply = await generateAIResponse(
+      const reply = await aiReply(
         'Pitaj pacijenta ' + displayName + ' za kakav pregled ili tretman dolaze. Dostupni tretmani: ' + treatmentList
       );
       return { response: reply, nextState: { ...updatedState, step: 'awaiting_treatment' } };
@@ -279,7 +273,7 @@ export async function handleInboundMessage(params: {
     // If no doctor yet
     if (!updatedState.doctorId && currentState?.step !== 'awaiting_time') {
       const docList = ctx.doctors.map(d => d.fullName).join(', ');
-      const reply = await generateAIResponse(
+      const reply = await aiReply(
         'Pitaj pacijenta ' + displayName + ' kod kojeg ljekara zele doci. Dostupni ljekari: ' + docList + '. Ako nemaju preferenciju, recimo im da cemo dodijeliti prvog slobodnog ljekara.'
       );
       return { response: reply, nextState: { ...updatedState, step: 'awaiting_doctor' } };
@@ -295,7 +289,7 @@ export async function handleInboundMessage(params: {
     }
 
     // Ask for preferred time
-    const reply = await generateAIResponse(
+    const reply = await aiReply(
       'Pitaj pacijenta ' + displayName + ' kada bi mogli doci ? koji dan i u koje vrijeme im odgovara.'
     );
     return { response: reply, nextState: { ...updatedState, step: 'awaiting_time', doctorId: targetDoctorId, doctorName: targetDoctorName } };
@@ -319,7 +313,7 @@ export async function handleInboundMessage(params: {
       return await checkAndBook({ ctx, updatedState, clinicId, patientId, displayName, targetDoctorId: targetDoctorId!, targetDoctorName, today });
     }
 
-    const reply = await generateAIResponse('Pitaj pacijenta ' + displayName + ' koji datum i vrijeme im odgovara za termin.');
+    const reply = await aiReply('Pitaj pacijenta ' + displayName + ' koji datum i vrijeme im odgovara za termin.');
     return { response: reply, nextState: { ...updatedState, step: 'awaiting_time' } };
   }
 
@@ -339,14 +333,14 @@ export async function handleInboundMessage(params: {
       treatmentTypeId: upcoming.treatmentTypeId ?? undefined,
       durationMin: 30,
     };
-    const reply = await generateAIResponse(
+    const reply = await aiReply(
       'Pacijent ' + displayName + ' zeli pomjeriti termin koji je bio ' + upcoming.date + ' u ' + upcoming.time + '. Otkazali smo stari termin. Pitaj kada im odgovara novi termin.'
     );
     return { response: reply, nextState: state };
   }
 
   // ?? OTHER / FALLBACK ??????????????????????????????????????????????????????
-  const reply = await generateAIResponse(
+  const reply = await aiReply(
     'Pacijent ' + displayName + ' je poslao poruku: "' + text + '". Odgovori ljubazno i usmjeri ih da zakazu termin ako je relevantno, ili reci im da ce nasze osoblje odgovoriti uskoro za specificna pitanja.'
   );
   return { response: reply, nextState: emptyState };
@@ -363,6 +357,7 @@ async function checkAndBook(params: {
   today: string;
 }): Promise<HandleResult> {
   const { ctx, updatedState, clinicId, patientId, displayName, targetDoctorId, targetDoctorName, today } = params;
+  const aiReply = (prompt: string) => generateResponse(buildAssistantSystemPrompt(ctx.vertical), prompt, 200);
   const durationMin = updatedState.durationMin ?? 30;
   const requestedDate = updatedState.requestedDate!;
   const requestedTime = updatedState.requestedTime!;
@@ -379,7 +374,7 @@ async function checkAndBook(params: {
     if (result.error) {
       return { response: 'Doslo je do greske. Molimo pokusajte ponovo.', nextState: updatedState };
     }
-    const reply = await generateAIResponse(
+    const reply = await aiReply(
       'Pacijent ' + displayName + ' je zakazao termin za ' + requestedDate + ' u ' + requestedTime + ' kod dr. ' + targetDoctorName + '. Napisi kratku potvrdu sa svim detaljima.'
     );
     return { response: reply, nextState: { intent: 'other', step: 'done' }, appointmentCreated: true };
@@ -414,7 +409,7 @@ async function checkAndBook(params: {
   }));
 
   const slotText = offeredSlots.map((s, i) => (i + 1) + '. ' + formatSlotTitle(s)).join('\n');
-  const reply = await generateAIResponse(
+  const reply = await aiReply(
     'Termin ' + requestedDate + ' u ' + requestedTime + ' nije slobodan. Ponudi pacijentu ' + displayName + ' ove slobodne termine:\n' + slotText + '\nZamoli ih da odaberu broj termina.'
   );
   return {

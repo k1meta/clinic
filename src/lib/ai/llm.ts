@@ -16,24 +16,35 @@ export interface LLMOptions {
   json?: boolean;
 }
 
+function primaryModel(): string {
+  return process.env.LLM_MODEL ?? 'llama-3.3-70b-versatile';
+}
+
 /**
- * Provider-agnostic single-shot LLM call. The signature matches the previous
- * implementation so existing call sites keep working unchanged.
- *
- * Backed by Groq (model controlled by `LLM_MODEL`, defaults to
- * `llama-3.3-70b-versatile`). Set `options.json: true` for the intent
- * classifier path so we get clean JSON instead of having to scrape it out
- * of free text. Note: Groq's JSON mode requires the system or user prompt
- * to literally contain the word "JSON" — our intent-classifier prompt
- * already does.
+ * Cheaper/faster model used when the primary is rate-limited or erroring.
+ * Free Groq tiers hit 429s under load; falling back keeps booking flows alive.
  */
-export async function generateResponse(
+function fallbackModel(): string {
+  return process.env.LLM_FALLBACK_MODEL ?? 'llama-3.1-8b-instant';
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Rate limits and transient upstream errors are worth retrying / failing over. */
+function isRetryable(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  return status === 429 || status === 408 || status === 500 || status === 502 || status === 503 || status === 529;
+}
+
+async function callModel(
+  model: string,
   systemPrompt: string,
   userMessage: string,
-  maxTokens: number = 300,
+  maxTokens: number,
   options?: LLMOptions,
 ): Promise<string> {
-  const model = process.env.LLM_MODEL ?? 'llama-3.3-70b-versatile';
   const res = await getClient().chat.completions.create({
     model,
     messages: [
@@ -44,4 +55,39 @@ export async function generateResponse(
     ...(options?.json ? { response_format: { type: 'json_object' } } : {}),
   });
   return res.choices[0]?.message?.content ?? '';
+}
+
+/**
+ * Provider-agnostic single-shot LLM call. The signature matches the previous
+ * implementation so existing call sites keep working unchanged.
+ *
+ * Backed by Groq (model controlled by `LLM_MODEL`). On a retryable error
+ * (429/5xx) it retries with backoff, then fails over to `LLM_FALLBACK_MODEL`
+ * before giving up. Set `options.json: true` for the intent-classifier path so
+ * we get clean JSON instead of scraping it from free text. Note: Groq's JSON
+ * mode requires the prompt to literally contain the word "JSON" — our
+ * intent-classifier prompt already does.
+ */
+export async function generateResponse(
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens: number = 300,
+  options?: LLMOptions,
+): Promise<string> {
+  const models = [primaryModel(), fallbackModel()].filter((m, i, arr) => arr.indexOf(m) === i);
+  let lastErr: unknown;
+
+  for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await callModel(model, systemPrompt, userMessage, maxTokens, options);
+      } catch (err) {
+        lastErr = err;
+        if (!isRetryable(err)) break;
+        await sleep(400 * (attempt + 1));
+      }
+    }
+  }
+
+  throw lastErr instanceof Error ? lastErr : new Error('LLM request failed');
 }

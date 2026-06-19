@@ -8,6 +8,7 @@ import {
   getMonthlyRevenue,
 } from '@/db/queries/appointments';
 import { getEngagementMetrics } from '@/db/queries/engagement-analytics';
+import { getRoiMetrics } from '@/db/queries/roi-analytics';
 import MetricCard from '@/components/MetricCard';
 import { redirect } from 'next/navigation';
 
@@ -21,13 +22,16 @@ export default async function AnalyticsPage() {
 
   const clinicId = admin.clinicId;
 
-  const [todayCount, noShowRate, weeklyOccupancy, monthlyRevenue, engagement] = await Promise.all([
+  const [todayCount, noShowRate, weeklyOccupancy, monthlyRevenue, engagement, roi] = await Promise.all([
     getTodayAppointmentCount(clinicId),
     getNoShowRate(clinicId),
     getWeeklyOccupancy(clinicId),
     getMonthlyRevenue(clinicId),
     getEngagementMetrics(clinicId),
+    getRoiMetrics(clinicId),
   ]);
+
+  const bam = (minor: number) => `${Math.round(minor / 100)} BAM`;
 
   return (
     <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
@@ -39,6 +43,57 @@ export default async function AnalyticsPage() {
           Revenue, performance, and clinic occupancy insights.
         </p>
       </div>
+
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-headline font-bold text-sm uppercase tracking-widest text-on-surface-variant">
+            Revenue Engine (ROI) &middot; This Month
+          </h2>
+          <span className="text-[10px] text-on-surface-variant">Estimates from attributable activity</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <MetricCard
+            icon="smart_toy"
+            iconBg="bg-primary/10"
+            iconColor="text-primary"
+            label="AI / online bookings"
+            value={bam(roi.aiBookedRevenue)}
+            sub={`${roi.aiBookedCount} booked by automation`}
+            subColor="text-on-surface-variant"
+            subIcon="event_available"
+          />
+          <MetricCard
+            icon="autorenew"
+            iconBg="bg-green-500/15"
+            iconColor="text-green-400"
+            label="Re-engagement revenue"
+            value={bam(roi.reEngagementRevenue)}
+            sub={`${roi.reEngagementCount} win-back visits`}
+            subColor="text-on-surface-variant"
+            subIcon="redo"
+          />
+          <MetricCard
+            icon="savings"
+            iconBg="bg-amber-500/10"
+            iconColor="text-amber-600"
+            label="No-show cost avoided (est.)"
+            value={bam(roi.noShowAvoidedEstimate)}
+            sub={`${roi.noShowRateCurrent}% now vs ${roi.noShowBaseline}% baseline`}
+            subColor={roi.noShowRateCurrent <= roi.noShowBaseline ? 'text-green-400' : 'text-tertiary'}
+            subIcon="trending_down"
+          />
+          <MetricCard
+            icon="call"
+            iconBg="bg-tertiary/10"
+            iconColor="text-tertiary"
+            label="After-hours calls handled"
+            value={String(roi.afterHoursCalls)}
+            sub={`Avg ticket ${bam(roi.avgTicket)}`}
+            subColor="text-on-surface-variant"
+            subIcon="nightlight"
+          />
+        </div>
+      </section>
 
       <section className="space-y-4">
         <h2 className="font-headline font-bold text-sm uppercase tracking-widest text-on-surface-variant">

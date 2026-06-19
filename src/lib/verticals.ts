@@ -75,6 +75,32 @@ export function getVerticalLabels(vertical: BusinessVertical): VerticalLabels {
   return VERTICAL_LABELS[vertical] ?? VERTICAL_LABELS.generic;
 }
 
+/** BCS role phrase for the AI assistant, tailored to the business vertical. */
+const VERTICAL_ASSISTANT_ROLE: Record<BusinessVertical, string> = {
+  dental: 'profesionalni recepcioner medicinske/stomatoloske klinike',
+  salon: 'profesionalni recepcioner salona za uljepsavanje',
+  vet: 'profesionalni recepcioner veterinarske klinike',
+  generic: 'profesionalni recepcioner',
+};
+
+export function getVerticalAssistantRole(vertical: BusinessVertical): string {
+  return VERTICAL_ASSISTANT_ROLE[vertical] ?? VERTICAL_ASSISTANT_ROLE.generic;
+}
+
+/**
+ * Build the base BCS system prompt for the conversational assistant, tailored
+ * to the clinic's vertical so salon/vet/generic tenants don't read as a medical
+ * clinic.
+ */
+export function buildAssistantSystemPrompt(vertical: BusinessVertical): string {
+  return [
+    'Ti si ' + getVerticalAssistantRole(vertical) + '.',
+    'Komuniciras na bosanskom/srpskom/hrvatskom jeziku, ili engleskom ako ti klijent pise na engleskom.',
+    'Budi kratak, jasan i ljubazan. Ne koristi emojije.',
+    'Koristi formalno obracanje (Vi).',
+  ].join(' ');
+}
+
 export function isBusinessVertical(v: string): v is BusinessVertical {
   return v === 'dental' || v === 'salon' || v === 'vet' || v === 'generic';
 }

@@ -1,16 +1,11 @@
 import { generateResponse } from './llm';
+import { buildAssistantSystemPrompt, type BusinessVertical } from '@/lib/verticals';
 import type { TimeSlot } from '../availability';
-
-const SYSTEM_PROMPT = [
-  'Ti si profesionalni medicinski recepcioner klinike.',
-  'Komuniciras na bosanskom/srpskom/hrvatskom jeziku.',
-  'Budi kratak, jasan i ljubazan. Ne koristi emojije.',
-  'Koristi formalno obracanje (Vi).',
-].join(' ');
 
 export async function generateRescheduleOptions(
   patientName: string,
   slots: TimeSlot[],
+  vertical: BusinessVertical = 'dental',
 ): Promise<string> {
   if (slots.length === 0) {
     return 'Nema dostupnih termina u narednih 14 dana. Molimo kontaktirajte nas telefonom.';
@@ -20,9 +15,9 @@ export async function generateRescheduleOptions(
     .map((s, i) => (i + 1) + '. ' + s.date + ' u ' + s.start)
     .join('\n');
 
-  const prompt = 'Pacijent ' + patientName + ' zeli da pomjeri termin. Ponudi mu sljedece slobodne termine:\n' + slotList + '\nNapisi kratku poruku sa ponudjenim terminima.';
+  const prompt = 'Klijent ' + patientName + ' zeli da pomjeri termin. Ponudi mu sljedece slobodne termine:\n' + slotList + '\nNapisi kratku poruku sa ponudjenim terminima.';
 
-  return generateResponse(SYSTEM_PROMPT, prompt, 200);
+  return generateResponse(buildAssistantSystemPrompt(vertical), prompt, 200);
 }
 
 export async function generateConfirmation(
@@ -30,12 +25,16 @@ export async function generateConfirmation(
   date: string,
   time: string,
   doctorName: string,
+  vertical: BusinessVertical = 'dental',
 ): Promise<string> {
-  const prompt = 'Pacijent ' + patientName + ' je potvrdio termin za ' + date + ' u ' + time + ' kod dr. ' + doctorName + '. Napisi kratku potvrdu.';
-  return generateResponse(SYSTEM_PROMPT, prompt, 150);
+  const prompt = 'Klijent ' + patientName + ' je potvrdio termin za ' + date + ' u ' + time + ' kod ' + doctorName + '. Napisi kratku potvrdu.';
+  return generateResponse(buildAssistantSystemPrompt(vertical), prompt, 150);
 }
 
-export async function generateCancellationAck(patientName: string): Promise<string> {
-  const prompt = 'Pacijent ' + patientName + ' je otkazao termin. Napisi kratku potvrdu otkazivanja i pozovi ih da zakazu ponovo kad im odgovara.';
-  return generateResponse(SYSTEM_PROMPT, prompt, 150);
+export async function generateCancellationAck(
+  patientName: string,
+  vertical: BusinessVertical = 'dental',
+): Promise<string> {
+  const prompt = 'Klijent ' + patientName + ' je otkazao termin. Napisi kratku potvrdu otkazivanja i pozovi ih da zakazu ponovo kad im odgovara.';
+  return generateResponse(buildAssistantSystemPrompt(vertical), prompt, 150);
 }

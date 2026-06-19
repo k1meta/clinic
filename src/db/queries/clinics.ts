@@ -4,6 +4,8 @@ import { clinics } from '../schema';
 import type { BusinessVertical } from '@/lib/verticals';
 import { isBusinessVertical } from '@/lib/verticals';
 
+export type PaymentGateway = 'none' | 'monri' | 'wspay';
+
 export type ClinicSettings = {
   workHours: { start: number; end: number };
   aiMessaging: boolean;
@@ -12,6 +14,14 @@ export type ClinicSettings = {
   /** Google Maps / Business Profile review link for first-visit WhatsApp prompts. */
   googleReviewUrl: string;
   vertical: BusinessVertical;
+  /** Baseline no-show rate (0..1) used for the ROI "cost avoided" estimate. */
+  noShowBaseline: number;
+  /** Deposits are opt-in. When false, payments are tracked manually (cash). */
+  depositEnabled: boolean;
+  /** Suggested deposit amount in minor units (BAM*100). */
+  depositAmount: number;
+  /** Online card gateway; 'none' = cash / manual mark-paid (default). */
+  paymentGateway: PaymentGateway;
 };
 
 const DEFAULT_SETTINGS: ClinicSettings = {
@@ -21,6 +31,10 @@ const DEFAULT_SETTINGS: ClinicSettings = {
   testPhoneNumber: '',
   googleReviewUrl: '',
   vertical: 'dental',
+  noShowBaseline: 0.2,
+  depositEnabled: false,
+  depositAmount: 0,
+  paymentGateway: 'none',
 };
 
 export async function getClinicSettings(clinicId: string): Promise<ClinicSettings> {
@@ -47,5 +61,18 @@ export async function getClinicSettings(clinicId: string): Promise<ClinicSetting
     testPhoneNumber: typeof raw.testPhoneNumber === 'string' ? raw.testPhoneNumber : DEFAULT_SETTINGS.testPhoneNumber,
     googleReviewUrl: typeof raw.googleReviewUrl === 'string' ? raw.googleReviewUrl : DEFAULT_SETTINGS.googleReviewUrl,
     vertical: isBusinessVertical(raw.vertical as string) ? (raw.vertical as BusinessVertical) : DEFAULT_SETTINGS.vertical,
+    noShowBaseline:
+      typeof raw.noShowBaseline === 'number' && raw.noShowBaseline >= 0 && raw.noShowBaseline <= 1
+        ? raw.noShowBaseline
+        : DEFAULT_SETTINGS.noShowBaseline,
+    depositEnabled: typeof raw.depositEnabled === 'boolean' ? raw.depositEnabled : DEFAULT_SETTINGS.depositEnabled,
+    depositAmount:
+      typeof raw.depositAmount === 'number' && raw.depositAmount >= 0
+        ? raw.depositAmount
+        : DEFAULT_SETTINGS.depositAmount,
+    paymentGateway:
+      raw.paymentGateway === 'monri' || raw.paymentGateway === 'wspay'
+        ? raw.paymentGateway
+        : DEFAULT_SETTINGS.paymentGateway,
   };
 }

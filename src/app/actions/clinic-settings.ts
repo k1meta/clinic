@@ -61,6 +61,35 @@ export async function updateAiSettings(input: { aiMessaging: boolean; aiCalls: b
   return { success: true };
 }
 
+const depositSettingsSchema = z.object({
+  depositEnabled: z.boolean(),
+  depositAmountBam: z.number().min(0).max(100000),
+  paymentGateway: z.enum(['none', 'monri', 'wspay']),
+  noShowBaselinePct: z.number().min(0).max(100),
+});
+
+export async function updateDepositSettings(input: {
+  depositEnabled: boolean;
+  depositAmountBam: number;
+  paymentGateway: 'none' | 'monri' | 'wspay';
+  noShowBaselinePct: number;
+}) {
+  const { clinicId } = await requireAdmin();
+  const parsed = depositSettingsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues.map((e) => e.message).join(', ') };
+  }
+  await writeClinicSettings(clinicId, {
+    depositEnabled: parsed.data.depositEnabled,
+    depositAmount: Math.round(parsed.data.depositAmountBam * 100),
+    paymentGateway: parsed.data.paymentGateway,
+    noShowBaseline: parsed.data.noShowBaselinePct / 100,
+  });
+  revalidatePath('/settings');
+  revalidatePath('/analytics');
+  return { success: true };
+}
+
 const phoneSchema = z.string().regex(/^\+[1-9]\d{6,14}$/, 'Phone must be in E.164 format (e.g. +38761123456)');
 
 const googleReviewUrlSchema = z

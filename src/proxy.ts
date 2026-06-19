@@ -7,13 +7,21 @@ const PUBLIC_API_PREFIXES = [
   '/api/sms/',
   '/api/voice/',
   '/api/cron/',
+  '/api/public/',
   '/api/auth/login-profiles',
 ];
+
+/** Public, unauthenticated pages (e.g. the embeddable booking widget). */
+const PUBLIC_PAGE_PREFIXES = ['/book'];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    return NextResponse.next();
+  }
+
+  if (PUBLIC_PAGE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix + '/'))) {
     return NextResponse.next();
   }
 

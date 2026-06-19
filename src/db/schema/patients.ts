@@ -19,6 +19,7 @@ export const patients = pgTable('patients', {
   whatsappId: text('whatsapp_id'),
   instagramId: text('instagram_id'),
   messengerId: text('messenger_id'),
+  referralCode: text('referral_code'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

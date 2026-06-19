@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { recordPayment, bulkPayBalance, waivePayment } from '@/app/actions/appointments';
 import { updatePatient, deletePatient } from '@/app/actions/patients';
+import { getReferralLink } from '@/app/actions/referrals';
 
 type AppointmentHistory = {
   id: string;
@@ -203,6 +204,7 @@ export default function PatientProfileModal({
   const [isEditing, setIsEditing] = useState(false);
   const [editError, setEditError] = useState('');
   const [deleteError, setDeleteError] = useState('');
+  const [referMsg, setReferMsg] = useState('');
   const [isPending, startTransition] = useTransition();
 
   function open() {
@@ -233,6 +235,24 @@ export default function PatientProfileModal({
       }
       close();
       router.refresh();
+    });
+  }
+
+  function handleCopyReferral() {
+    setReferMsg('');
+    startTransition(async () => {
+      const res = await getReferralLink(patient.id);
+      if ('error' in res || !res.url) {
+        setReferMsg('Failed to create link');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(res.url);
+        setReferMsg('Referral link copied!');
+      } catch {
+        setReferMsg(res.url);
+      }
+      setTimeout(() => setReferMsg(''), 4000);
     });
   }
 
@@ -609,15 +629,30 @@ export default function PatientProfileModal({
           {/* Footer */}
           <div className="px-6 py-4 border-t border-surface-container-high/30 flex items-center justify-between gap-4 shrink-0">
             <div className="min-w-0">
-              {canDelete && !isEditing && (
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
-                  onClick={handleRemove}
+                  onClick={handleCopyReferral}
                   disabled={isPending}
-                  className="px-3 py-2 text-xs font-bold uppercase tracking-widest border border-error text-error rounded-lg hover:bg-error/5 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-1 px-3 py-2 text-xs font-bold uppercase tracking-widest border border-primary/30 text-primary rounded-lg hover:bg-primary/5 disabled:opacity-50 transition-colors"
+                  title="Copy this patient's referral link"
                 >
-                  {isPending ? 'Removing...' : 'Remove patient'}
+                  <span className="material-symbols-outlined text-sm">share</span>
+                  Referral link
                 </button>
+                {canDelete && !isEditing && (
+                  <button
+                    type="button"
+                    onClick={handleRemove}
+                    disabled={isPending}
+                    className="px-3 py-2 text-xs font-bold uppercase tracking-widest border border-error text-error rounded-lg hover:bg-error/5 disabled:opacity-50 transition-colors"
+                  >
+                    {isPending ? 'Removing...' : 'Remove patient'}
+                  </button>
+                )}
+              </div>
+              {referMsg && (
+                <p className="mt-2 text-xs font-medium text-primary">{referMsg}</p>
               )}
               {deleteError && (
                 <p className="mt-2 text-xs font-medium text-error">{deleteError}</p>

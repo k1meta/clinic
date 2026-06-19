@@ -10,3 +10,4 @@ export { calls, callDirectionEnum, callStatusEnum } from './calls';
 export { reviews } from './reviews';
 export { campaigns, campaignRecipients, campaignStatusEnum } from './campaigns';
 export { waitingList, waitlistStatusEnum } from './waiting-list';
+export { referrals, referralStatusEnum } from './referrals';

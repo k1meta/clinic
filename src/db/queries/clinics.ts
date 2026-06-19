@@ -37,6 +37,15 @@ const DEFAULT_SETTINGS: ClinicSettings = {
   paymentGateway: 'none',
 };
 
+export async function getClinicBySlug(slug: string) {
+  const [clinic] = await db
+    .select({ id: clinics.id, name: clinics.name, slug: clinics.slug })
+    .from(clinics)
+    .where(eq(clinics.slug, slug))
+    .limit(1);
+  return clinic ?? null;
+}
+
 export async function getClinicSettings(clinicId: string): Promise<ClinicSettings> {
   const [clinic] = await db
     .select({ settings: clinics.settings })

@@ -1,186 +1,84 @@
-﻿# ClinicOS — AI-Powered Front Office Dashboard
+﻿# ClinicOS
 
-## Project Overview
-ClinicOS is a **cloud-hosted SaaS web application** for private medical and dental clinics. It replaces fragmented manual workflows (phone calls, paper schedules, WhatsApp reminders, Google review checks) with a single intelligent dashboard that automates the front office and surfaces actionable data. Sold as a monthly SaaS subscription, white-labelled or agency-branded. Each clinic gets isolated multi-tenant environment.
+Front-office dashboard for private clinics and other appointment businesses in BiH. Sold as a monthly, white-label, multi-tenant SaaS. Staff need no technical knowledge.
 
 ## Goals
-- Reduce appointment no-show rate from ~20% to below 5%
-- Automate patient communication across phone, WhatsApp, and SMS
-- Single real-time dashboard view from any device
-- Surface revenue-tied insights: no-shows recovered, re-engagement bookings, review acquisition
-- Zero technical knowledge required from clinic staff
+- Reduce no-shows from ~20% to below 5%
+- An AI answers the phone when the business can't, and books the appointment
+- Automate reminders and replies over WhatsApp, SMS and email
+- Show owners the revenue this recovers
 
-## User Roles
-| Role | Access |
+## Rules for working here
+- Read the relevant guide in `node_modules/next/dist/docs/` before writing Next.js code (see `AGENTS.md`). This is Next.js 16: middleware is `src/proxy.ts`.
+- **Every query is scoped by `clinic_id`.** Pages and actions get it from `getClinicId()` / `requireAdmin()` in `src/db/queries/auth.ts`.
+- **Never use the server's timezone for appointments.** No `getHours()`, no `new Date('YYYY-MM-DDTHH:MM')`. Use `src/lib/timezone.ts` with `getClinicSettings(clinicId).timezone`.
+- **Phone numbers:** parse with `toE164()` from `src/lib/phone.ts`; match stored ones with `phoneDigitVariants()`.
+- Do not log names, phone numbers, transcripts or raw provider payloads. Use `describeError()` for database errors.
+- Text spoken or shown to patients is Bosnian (ijekavica), formal "Vi".
+- Database migrations, purchases and messages to real people need the owner's explicit OK.
+
+## Stack (what is actually used)
+| Area | Choice |
 |------|--------|
-| Clinic Owner / Director | Full access to all modules, analytics, billing, settings |
-| Receptionist / Coordinator | Calendar, patient database, call log, alert management |
-| Doctor / Practitioner | Read-only view of own daily schedule and patient notes |
-| Agency Admin | Backend config, onboarding, troubleshooting |
+| App | Next.js 16 App Router, React 19, TypeScript, server actions, route handlers |
+| UI | Tailwind CSS v4 tokens in `src/app/globals.css`, Material Symbols, Manrope + Inter, light/dark |
+| Auth | Supabase Auth; roles `admin` and `staff` in `users` |
+| Database | Supabase Postgres, Drizzle ORM (`src/db/schema`) |
+| Jobs | BullMQ + Upstash Redis, worker in `src/worker.ts`; inline fallback in development |
+| Text AI | Groq (`src/lib/ai`) |
+| Voice AI | ElevenLabs Agents over SIP |
+| Messaging | Meta WhatsApp/Instagram/Messenger Cloud API, Twilio SMS, Resend email |
 
----
+Not used despite older plans: Clerk, Fastify, n8n, Vapi, Retell, 360dialog, shadcn/ui, Zustand, Stripe.
 
-## Tech Stack (Recommended from Spec)
-
-### Frontend
-- **Framework:** Next.js (App Router, SSR, file-based routing) + TypeScript
-- **Styling:** Tailwind CSS (utility-first)
-- **Components:** shadcn/ui (accessible modals, drawers, tables, forms, toasts, badges)
-- **State:** Zustand (lightweight global state)
-- **Charts:** Recharts (composable SVG charts)
-- **Real-time:** Pusher or Soketi (WebSocket push)
-- **Forms:** React Hook Form + Zod
-- **Dates:** date-fns
-- **Icons:** Material Symbols Outlined (used in mockups), Lucide React (recommended in spec)
-
-### Backend
-- **Runtime:** Node.js 20 + TypeScript
-- **API:** Fastify (schema validation with Zod)
-- **Auth:** Clerk (multi-tenancy, MFA, roles, webhooks)
-- **Job Queue:** BullMQ + Redis
-- **Email:** Resend (React email templates)
-- **PDF:** Puppeteer
-- **File Storage:** Cloudflare R2
-- **Cache:** Upstash Redis
-
-### Database
-- **Primary:** PostgreSQL via Supabase (RLS, real-time subscriptions)
-- **ORM:** Drizzle ORM (type-safe, fast queries)
-- **Multi-tenancy:** Row-level security with `clinic_id` on every table
-- **Search:** PostgreSQL full-text search (tsvector)
-
-### AI & Automation
-- **LLM Primary:** Anthropic Claude API (claude-sonnet-4-20250514)
-- **LLM Fallback:** OpenAI GPT-4o
-- **Workflow:** n8n (self-hosted, visual workflow engine)
-- **Voice AI:** Vapi.ai (phone number provisioning, STT/TTS, tool calling)
-- **WhatsApp:** 360dialog (Business API)
-- **SMS:** Twilio
-- **Prompt Mgmt:** Langfuse (self-hosted)
-
-### External Integrations
-- Google Calendar API (two-way sync)
-- Google My Business API (reviews & replies)
-- Google Places API (clinic onboarding)
-- Twilio (phone numbers for Voice AI)
-- Stripe (subscription billing)
-
-### Infrastructure
-- **Hosting:** Railway (zero-config deploys, preview environments)
-- **CDN/DNS:** Cloudflare
-- **Errors:** Sentry
-- **Logs:** Better Stack (Logtail)
-- **CI/CD:** GitHub Actions
-- **Secrets:** Railway environment variables
-
----
-
-## Current Project Setup
-- **Framework:** Next.js 16 + TypeScript + Tailwind CSS v4
-- **Directory:** `c:\Users\User\Desktop\startup`
-- **Node:** v24.12.0 | npm: 11.7.0
-- **Build:** `npm run build` (Turbopack)
-- **Dev:** `npm run dev`
-
-## Design System
-- **Primary Color:** `#004ac6`
-- **Headline Font:** Manrope (700, 800, 900)
-- **Body Font:** Inter (400, 500, 600)
-- **Icons:** Material Symbols Outlined (Google Fonts CDN)
-- **Color Tokens:** Material Design 3 inspired (see `globals.css` for full token list)
-
-## Project Structure
+## Layout
 ```
-src/
-  app/
-    layout.tsx          # Root layout with Sidebar + TopNav
-    page.tsx            # Overview Dashboard (/)
-    globals.css         # Tailwind v4 theme tokens + custom classes
-    calendar/
-      page.tsx          # Appointment Calendar (/calendar)
-    patients/
-      page.tsx          # Patient Database (/patients)
-    voice-ai/
-      page.tsx          # Voice AI Control Center (/voice-ai)
-  components/
-    Sidebar.tsx         # Side navigation with active state
-    TopNav.tsx          # Top navigation bar with search
+config/voice/agent.ts     Bosnian phone agent: prompt and tools, as code
+scripts/                  migrations, voice setup, smoke test
+src/app/(dashboard)/      pages; src/app/(auth)/ sign-in
+src/app/actions/          server actions
+src/app/api/              webhooks, cron, voice tools (public paths are listed in src/proxy.ts)
+src/db/schema, queries/   Drizzle tables and queries
+src/jobs/                 reminder scans, message sending, call logging
+src/lib/voice/            phone booking logic
+src/lib/availability.ts   slots and booking rules, shared by all channels
+tests/                    node:test, no database needed
 ```
 
-## Pages Implemented (Frontend Mockups)
-1. **Overview Dashboard** (`/`) — KPIs, weekly occupancy chart, upcoming appointments, smart alerts, Voice AI card
-2. **Appointment Calendar** (`/calendar`) — Day view grid, doctor columns, appointment blocks, waiting list sidebar
-3. **Patient Database** (`/patients`) — Patient table, search/filters, stats, incomplete files, intelligence highlight
-4. **Voice AI Control Center** (`/voice-ai`) — AI status, live transcript, automation toggles, call log table
-
----
-
-## Core Data Model (10 tables)
-All tables include `clinic_id` (UUID, FK to clinics), `created_at`, `updated_at`.
-
-| Table | Purpose |
-|-------|---------|
-| `clinics` | One row per client clinic (name, slug, timezone, settings JSONB) |
-| `users` | Staff accounts (email, role, clerk_user_id) |
-| `patients` | Patient records (name, phone, dob, status, opt_out) |
-| `appointments` | All bookings (patient, doctor, treatment, status, source) |
-| `doctors` | Clinic practitioners (specialty, schedule JSONB) |
-| `treatment_types` | Treatment catalogue (name, duration, recurring flag) |
-| `messages` | Full communication log (channel, direction, status) |
-| `automations` | Automation configs (type, template, channel) |
-| `calls` | Voice AI call log (transcript, outcome, summary) |
-| `reviews` | Google reviews (rating, reply_draft, posted status) |
-| `alerts` | Dashboard alert feed (type, severity, related record) |
-| `waiting_list` | Waiting list entries (patient, treatment, preferred window) |
-
----
-
-## Build Phases
-### Phase 1 — MVP (Weeks 1-8) [P0/P1]
-- Auth & multi-tenancy (Clerk)
-- Overview dashboard
-- Appointment calendar (day/week, CRUD, status)
-- Patient database (records, search, notes)
-- Reminder automation (WhatsApp 48h + SMS fallback + 2h nudge)
-- Post-visit follow-up
-- Review manager (Google reviews + Claude reply)
-- Basic analytics
-- Settings module
-
-### Phase 2 — Full Product (Weeks 9-18) [P1/P2]
-- Voice AI call handler (Vapi)
-- Waiting list automation
-- Re-engagement module
-- Google Calendar sync
-- Analytics ROI module
-- CSV import, PDF export, annual check-up nudge
-
-### Phase 3 — Moat Features (Month 5+) [P2]
-- Multi-location support
-- WhatsApp two-way inbox
-- Drag-and-drop calendar
-- Custom domain whitelabel
-- Doctor mobile view
-
----
-
-## Non-Functional Requirements
-- **Performance:** Dashboard load < 2s, API p95 < 500ms, search < 300ms
-- **Reliability:** 99.5% uptime, idempotent reminder jobs, 3x retry with backoff
-- **Security:** TLS 1.2+, AES-256 at rest, row-level security, GDPR compliant
-- **Scalability:** 500 tenants per deployment, BullMQ burst handling, PgBouncer pooling
-- **Accessibility:** Mobile responsive, 44x44px tap targets, multi-language (BS/HR/SR/EN)
-
----
+## Voice AI
+```
+caller → business number → (no answer / busy / off) operator forwards
+  → +387 landing number → SIP → ElevenLabs agent → /api/voice/* → Postgres
+```
+- Setup: `VOICE_AI_SETUP.md`. Test plan: `config/voice/PILOT_BCS.md`.
+- The **called number** picks the clinic (`voice_numbers`). `DEFAULT_CLINIC_ID` works outside production only.
+- Identity comes from `caller_number`, `called_number` and `conversation_id`, which ElevenLabs fills from the phone network. Model-written fields are never proof of identity.
+- Only caller ID may reveal, move or cancel an appointment. A spoken number can only register a patient. Otherwise use `take_message`.
+- Caller ID can be spoofed, so never expose medical data by phone.
+- Auth fails closed: bearer key on tools and initiation, HMAC on the post-call webhook.
+- Tools answer business failures with HTTP 200 and `success: false`; the agent reads `message`.
+- No live transfer: ringing the business would forward back to the AI.
+- Landing numbers must be Bosnian. BH Telecom does not offer forwarding abroad.
 
 ## Commands
 ```bash
-npm run dev      # Start development server
-npm run build    # Production build
-npm run lint     # Run ESLint
+npm run dev              # app
+npm run worker           # queue worker and reminder schedule
+npm run build            # production build
+npm run lint
+npm test                 # unit tests
+npm run voice:tunnel     # public address for /api/voice only (ngrok)
+npm run voice:setup      # push config/voice/agent.ts to ElevenLabs
+npm run voice:number     # connect a number to a clinic
+npm run voice:smoke      # end-to-end tool check against a running app
+npm run db:migrate-voice # voice_numbers table
+npm run tunnel           # ngrok + registers the WhatsApp webhook with Meta
 ```
 
-## File Naming Conventions
-- Components: PascalCase (`Sidebar.tsx`, `TopNav.tsx`)
-- Pages: `page.tsx` in route directories
-- Styles: `globals.css` with Tailwind v4 `@theme` tokens
+## Known gaps
+- Opening hours are per weekday (`settings.weekHours`, see `src/lib/work-week.ts`); no per-doctor hours or holidays yet.
+- `drizzle/` contains only the first migration; later changes are in `scripts/`.
+- `scripts/migration-no-overlap.sql` is manual. Voice bookings lock per doctor anyway; other channels rely on it.
+- Analytics date ranges still use server time; set `TZ=Europe/Sarajevo` on the host.
+- ESLint reports 7 older errors (`useInlineQueueFallback` naming, two effects).
+- Branch `Money-grow-engine-shift` (waiting list, booking widget, referrals) is not merged.

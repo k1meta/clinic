@@ -2,33 +2,42 @@
 
 import { useState, useTransition } from 'react';
 import { updateWorkHours } from '@/app/actions/clinic-settings';
+import { WEEK_ORDER, type DayHours, type WeekHours } from '@/lib/work-week';
+
+const DAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const NEW_DAY: DayHours = { start: 9, end: 13 };
 
 function formatHour(h: number) {
-  if (h === 0) return '12:00 AM';
-  if (h < 12) return `${h}:00 AM`;
-  if (h === 12) return '12:00 PM';
-  return `${h - 12}:00 PM`;
+  return `${String(h).padStart(2, '0')}:00`;
 }
 
-export default function WorkHoursForm({ currentStart, currentEnd }: { currentStart: number; currentEnd: number }) {
-  const [start, setStart] = useState(currentStart);
-  const [end, setEnd] = useState(currentEnd);
+export default function WorkHoursForm({ current }: { current: WeekHours }) {
+  const [week, setWeek] = useState<WeekHours>(current);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  function setDay(day: number, hours: DayHours | null) {
+    setWeek((previous) => previous.map((value, index) => (index === day ? hours : value)));
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setSaved(false);
 
-    if (end <= start) {
-      setError('End hour must be after start hour');
+    const invalid = WEEK_ORDER.find((day) => {
+      const hours = week[day];
+      return hours && hours.end <= hours.start;
+    });
+    if (invalid !== undefined) {
+      setError(`${DAY_LABELS[invalid]}: closing must be after opening`);
       return;
     }
 
     startTransition(async () => {
-      const result = await updateWorkHours({ start, end });
+      const result = await updateWorkHours({ week });
       if (result?.error) {
         setError(result.error);
       } else {
@@ -38,40 +47,48 @@ export default function WorkHoursForm({ currentStart, currentEnd }: { currentSta
     });
   }
 
+  const selectClass = 'min-h-11 bg-surface-container-low rounded-lg px-3 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body disabled:opacity-40';
+
   return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-3 flex-wrap">
-      <div className="flex-1 min-w-[140px]">
-        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Opens At</label>
-        <select
-          value={start}
-          onChange={(e) => setStart(Number(e.target.value))}
-          className="w-full bg-surface-container-low rounded-lg py-2.5 px-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body"
-        >
-          {Array.from({ length: 24 }, (_, i) => (
-            <option key={i} value={i}>{formatHour(i)}</option>
-          ))}
-        </select>
-      </div>
-      <div className="flex-1 min-w-[140px]">
-        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">Closes At</label>
-        <select
-          value={end}
-          onChange={(e) => setEnd(Number(e.target.value))}
-          className="w-full bg-surface-container-low rounded-lg py-2.5 px-4 text-sm border-none focus:ring-2 focus:ring-primary/20 font-body"
-        >
-          {Array.from({ length: 24 }, (_, i) => (
-            <option key={i} value={i}>{formatHour(i)}</option>
-          ))}
-        </select>
-      </div>
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {WEEK_ORDER.map((day) => {
+        const hours = week[day];
+        const label = DAY_LABELS[day];
+        return (
+          <div key={day} className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-3 w-36 min-h-11 text-sm font-semibold text-on-surface">
+              <input
+                type="checkbox"
+                className="w-5 h-5"
+                checked={hours !== null}
+                onChange={(e) => setDay(day, e.target.checked ? NEW_DAY : null)}
+              />
+              {label}
+            </label>
+            {hours ? (
+              <>
+                <select aria-label={`${label} opens`} value={hours.start} onChange={(e) => setDay(day, { ...hours, start: Number(e.target.value) })} className={selectClass}>
+                  {HOURS.map((h) => <option key={h} value={h}>{formatHour(h)}</option>)}
+                </select>
+                <span className="text-on-surface-variant">&ndash;</span>
+                <select aria-label={`${label} closes`} value={hours.end} onChange={(e) => setDay(day, { ...hours, end: Number(e.target.value) })} className={selectClass}>
+                  {HOURS.map((h) => <option key={h} value={h}>{formatHour(h)}</option>)}
+                </select>
+              </>
+            ) : (
+              <span className="text-sm text-on-surface-variant">Closed</span>
+            )}
+          </div>
+        );
+      })}
       <button
         type="submit"
         disabled={isPending}
-        className="px-5 py-2.5 bg-primary text-white text-sm font-bold rounded-lg shadow-sm hover:shadow-md active:scale-95 transition-all disabled:opacity-50 shrink-0"
+        className="min-h-11 px-5 bg-primary text-white text-sm font-bold rounded-lg shadow-sm hover:shadow-md active:scale-95 transition-all disabled:opacity-50"
       >
         {isPending ? 'Saving...' : saved ? 'Saved!' : 'Save Hours'}
       </button>
-      {error && <p className="text-error text-xs font-medium mt-1 w-full">{error}</p>}
+      {error && <p role="alert" className="text-error text-xs font-medium">{error}</p>}
     </form>
   );
 }

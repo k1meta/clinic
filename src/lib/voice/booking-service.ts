@@ -1,345 +1,440 @@
-import { and, count, eq, gte, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, count, eq, gt, gte, inArray, lt, ne, notInArray, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { appointments, calls, doctors, patients } from '@/db/schema';
+import { appointments, doctors, patients, treatmentTypes } from '@/db/schema';
+import { getClinicSettings, type ClinicSettings } from '@/db/queries/clinics';
 import {
-  checkNoOverlap,
+  findSlotProblem,
   getAvailableSlots,
   getNextAvailableSlots,
+  type SlotProblem,
   type TimeSlot,
 } from '@/lib/availability';
-import { normalizePhone, parseDateTime, phoneMatchVariants } from '@/lib/voice/utils';
+import { isValidDate, speakDateBs, todayInZone, toZonedParts, zonedToUtc } from '@/lib/timezone';
+import { tryRecordCall, type VoiceContext } from '@/lib/voice/call-log';
+import { nameMatches } from '@/lib/voice/names';
+import { findPatientsByPhone, resolveBookingPatient, resolveVerifiedPatient } from '@/lib/voice/patients';
 
-export type VoiceBookingErrorCode =
-  | 'patient_not_found'
+const DEFAULT_DURATION_MIN = 30;
+
+export type VoiceErrorCode =
   | 'doctor_not_found'
+  | 'treatment_not_found'
   | 'invalid_datetime'
   | 'slot_unavailable'
-  | 'no_upcoming_appointment'
   | 'no_slots'
-  | 'ai_calls_disabled'
-  | 'no_caller_phone'
+  | 'no_upcoming_appointment'
+  | 'multiple_appointments'
   | 'missing_patient_name'
-  | 'missing_patient_phone';
+  | 'missing_patient_phone'
+  | 'ambiguous_patient'
+  | 'caller_not_verified'
+  | SlotProblem;
 
-export type VoiceBookingResult<T> =
+export type VoiceResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string; code: VoiceBookingErrorCode };
+  | { ok: false; error: string; code: VoiceErrorCode; alternatives?: OfferedSlot[] };
 
-export type VoiceBookingContext = {
-  clinicId: string;
-  provider: 'retell' | 'elevenlabs';
-  providerCallId: string;
-  fromNumber?: string | null;
-  language?: string;
-};
+export type OfferedSlot = TimeSlot & { doctor: string; spoken: string };
 
-function msg(language: string | undefined, bs: string, en: string) {
-  return language?.toLowerCase().startsWith('en') ? en : bs;
+type Doctor = { id: string; fullName: string; specialty: string };
+type Treatment = { id: string; name: string; durationMin: number; price: number | null };
+type Failure = { ok: false; error: string; code: VoiceErrorCode };
+
+function speakSlot(date: string, time: string): string {
+  return `${speakDateBs(date)} u ${time}`;
 }
 
-function phoneDigits(phone: string): string {
-  return phone.replace(/\D/g, '');
+async function getActiveDoctors(clinicId: string): Promise<Doctor[]> {
+  return db
+    .select({ id: doctors.id, fullName: doctors.fullName, specialty: doctors.specialty })
+    .from(doctors)
+    .where(and(eq(doctors.clinicId, clinicId), eq(doctors.isActive, true)))
+    .orderBy(doctors.fullName);
 }
 
-function phoneMatchCondition(clinicId: string, phone: string) {
-  const variants = phoneMatchVariants(phone);
-  const digits = phoneDigits(phone);
-  return and(
-    eq(patients.clinicId, clinicId),
-    or(
-      ...variants.map((v) => eq(patients.phone, v)),
-      sql`regexp_replace(coalesce(${patients.phone}, ''), '[^0-9]', '', 'g') = ${digits}`,
-    )!,
-  );
+/** No name → every active doctor. An unknown name is an error, never someone else. */
+async function pickDoctors(
+  clinicId: string,
+  spokenDoctor?: string,
+): Promise<{ ok: true; doctors: Doctor[] } | Failure> {
+  const all = await getActiveDoctors(clinicId);
+  if (all.length === 0) {
+    return { ok: false, code: 'doctor_not_found', error: 'Trenutno nema dostupnih doktora.' };
+  }
+  if (!spokenDoctor) return { ok: true, doctors: all };
+  const matches = all.filter((d) => nameMatches(spokenDoctor, d.fullName));
+  if (matches.length > 0) return { ok: true, doctors: matches };
+  return {
+    ok: false,
+    code: 'doctor_not_found',
+    error: `Nema doktora "${spokenDoctor}". Dostupni su: ${all.map((d) => d.fullName).join(', ')}.`,
+  };
 }
 
-export async function findPatientByPhone(clinicId: string, phone: string | null | undefined) {
-  if (!phone) return null;
-  const [patient] = await db
-    .select({ id: patients.id, fullName: patients.fullName, phone: patients.phone })
-    .from(patients)
-    .where(phoneMatchCondition(clinicId, phone))
-    .limit(1);
-  return patient ?? null;
-}
-
-export async function findOrCreatePatientByPhone(params: {
-  clinicId: string;
-  phone: string;
-  fullName?: string;
-}) {
-  const existing = await findPatientByPhone(params.clinicId, params.phone);
-  if (existing) return existing;
-
-  const name = params.fullName?.trim() || 'Nepoznati pacijent';
-  const [created] = await db
-    .insert(patients)
-    .values({
-      clinicId: params.clinicId,
-      fullName: name,
-      phone: normalizePhone(params.phone),
-      status: 'new',
+async function pickTreatment(
+  clinicId: string,
+  spokenTreatment?: string,
+): Promise<{ ok: true; treatment: Treatment | null } | Failure> {
+  if (!spokenTreatment) return { ok: true, treatment: null };
+  const all = await db
+    .select({
+      id: treatmentTypes.id,
+      name: treatmentTypes.name,
+      durationMin: treatmentTypes.defaultDurationMin,
+      price: treatmentTypes.price,
     })
-    .returning({ id: patients.id, fullName: patients.fullName, phone: patients.phone });
+    .from(treatmentTypes)
+    .where(eq(treatmentTypes.clinicId, clinicId))
+    .orderBy(treatmentTypes.name);
 
-  return created;
+  const wanted = spokenTreatment.toLowerCase();
+  const treatment =
+    all.find((t) => t.name.toLowerCase() === wanted) ?? all.find((t) => nameMatches(spokenTreatment, t.name));
+  if (treatment) return { ok: true, treatment };
+  return {
+    ok: false,
+    code: 'treatment_not_found',
+    error: `Nema usluge "${spokenTreatment}". Dostupne usluge: ${all.map((t) => t.name).join(', ')}. Ako pacijent nije siguran, izostavi uslugu.`,
+  };
 }
 
-const PLACEHOLDER_PATIENT_NAME = 'Nepoznati pacijent';
-
-export async function createPatientForVoiceBooking(params: {
+async function findSlots(params: {
   clinicId: string;
-  phone: string;
-  fullName: string;
-}) {
-  const name = params.fullName.trim();
-  if (!name) {
-    throw new Error('fullName is required for voice booking registration');
+  doctors: Doctor[];
+  durationMin: number;
+  fromDate: string;
+  onlyThatDay: boolean;
+  nearTime?: string;
+  limit: number;
+}): Promise<OfferedSlot[]> {
+  const perDoctor = await Promise.all(
+    params.doctors.map(async (doctor) => {
+      const slots = params.onlyThatDay
+        ? await getAvailableSlots(params.clinicId, doctor.id, params.fromDate, params.durationMin)
+        : await getNextAvailableSlots(params.clinicId, doctor.id, params.fromDate, params.durationMin, 40);
+      return slots.map((slot) => ({ ...slot, doctor: doctor.fullName, spoken: speakSlot(slot.date, slot.start) }));
+    }),
+  );
+
+  const toMinutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+  const target = params.nearTime ? toMinutes(params.nearTime) : null;
+
+  const seen = new Set<string>();
+  return perDoctor
+    .flat()
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      if (target !== null) {
+        const diff = Math.abs(toMinutes(a.start) - target) - Math.abs(toMinutes(b.start) - target);
+        if (diff !== 0) return diff;
+      }
+      return a.start < b.start ? -1 : a.start > b.start ? 1 : 0;
+    })
+    .filter((slot) => {
+      const key = `${slot.date} ${slot.start}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, params.limit);
+}
+
+export async function checkAvailability(params: {
+  clinicId: string;
+  date?: string;
+  time?: string;
+  doctor?: string;
+  treatment?: string;
+}): Promise<VoiceResult<{ slots: OfferedSlot[]; message: string }>> {
+  const settings = await getClinicSettings(params.clinicId);
+  const today = todayInZone(settings.timezone);
+
+  if (params.date && !isValidDate(params.date)) {
+    return { ok: false, code: 'invalid_datetime', error: 'Datum mora biti u formatu YYYY-MM-DD.' };
+  }
+  if (params.date && params.date < today) {
+    return { ok: false, code: 'in_past', error: `Taj datum je prošao. Danas je ${speakDateBs(today)} (${today}).` };
   }
 
-  const [created] = await db
-    .insert(patients)
-    .values({
-      clinicId: params.clinicId,
-      fullName: name,
-      phone: normalizePhone(params.phone),
-      status: 'new',
-    })
-    .returning({ id: patients.id, fullName: patients.fullName, phone: patients.phone });
+  const [doctorPick, treatmentPick] = await Promise.all([
+    pickDoctors(params.clinicId, params.doctor),
+    pickTreatment(params.clinicId, params.treatment),
+  ]);
+  if (!doctorPick.ok) return doctorPick;
+  if (!treatmentPick.ok) return treatmentPick;
 
-  return created;
+  const search = {
+    clinicId: params.clinicId,
+    doctors: doctorPick.doctors,
+    durationMin: treatmentPick.treatment?.durationMin ?? DEFAULT_DURATION_MIN,
+    nearTime: params.time,
+    limit: 3,
+  };
+  let slots = await findSlots({ ...search, fromDate: params.date ?? today, onlyThatDay: Boolean(params.date) });
+  let prefix = 'Slobodno: ';
+  if (slots.length === 0 && params.date) {
+    slots = await findSlots({ ...search, fromDate: params.date, onlyThatDay: false });
+    prefix = `${speakDateBs(params.date)} nema slobodnih termina. Najbliže slobodno: `;
+  }
+  if (slots.length === 0) {
+    return { ok: false, code: 'no_slots', error: 'Nema slobodnih termina u naredne dvije sedmice. Ponudi take_message.' };
+  }
+  return {
+    ok: true,
+    data: { slots, message: prefix + slots.map((s) => `${s.spoken} (${s.doctor})`).join('; ') + '.' },
+  };
 }
 
-export async function updatePatientNameIfPlaceholder(patientId: string, fullName: string) {
-  const name = fullName.trim();
-  if (!name) return null;
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-  const [updated] = await db
-    .update(patients)
-    .set({ fullName: name, updatedAt: new Date() })
-    .where(and(eq(patients.id, patientId), eq(patients.fullName, PLACEHOLDER_PATIENT_NAME)))
-    .returning({ id: patients.id, fullName: patients.fullName, phone: patients.phone });
-
-  if (updated) return updated;
-
-  const [existing] = await db
-    .select({ id: patients.id, fullName: patients.fullName, phone: patients.phone })
-    .from(patients)
-    .where(eq(patients.id, patientId))
-    .limit(1);
-
-  return existing ?? null;
-}
-
-export type CallerType = 'unknown' | 'new' | 'returning';
-
-export type CallerProfile = {
-  callerType: CallerType;
-  patientId?: string;
-  patientName?: string;
-  firstName?: string;
-  upcomingAppointment?: { date: string; time: string; doctorName: string };
-  completedVisitCount: number;
-  ambiguous?: boolean;
-  matchedNames?: string[];
-  message: string;
-};
-
-function parseFirstName(fullName: string): string {
-  return fullName.trim().split(/\s+/)[0] ?? fullName;
-}
-
-async function findPatientsByPhone(clinicId: string, phone: string) {
-  return db
-    .select({
-      id: patients.id,
-      fullName: patients.fullName,
-      phone: patients.phone,
-      status: patients.status,
-    })
-    .from(patients)
-    .where(phoneMatchCondition(clinicId, phone));
-}
-
-async function countCompletedVisits(clinicId: string, patientId: string) {
-  const [row] = await db
-    .select({ total: count() })
+/** Serializes bookings per doctor, so two callers cannot take the same slot. */
+async function lockDoctorAndCheckFree(
+  tx: Tx,
+  params: { doctorId: string; startsAt: Date; endsAt: Date; excludeId?: string },
+): Promise<boolean> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${params.doctorId}::text, 0))`);
+  const [conflict] = await tx
+    .select({ id: appointments.id })
     .from(appointments)
     .where(
       and(
-        eq(appointments.clinicId, clinicId),
-        eq(appointments.patientId, patientId),
-        eq(appointments.status, 'completed'),
+        eq(appointments.doctorId, params.doctorId),
+        notInArray(appointments.status, ['cancelled', 'no_show']),
+        lt(appointments.startsAt, params.endsAt),
+        gt(appointments.endsAt, params.startsAt),
+        ...(params.excludeId ? [ne(appointments.id, params.excludeId)] : []),
       ),
-    );
-  return row?.total ?? 0;
-}
-
-async function getUpcomingAppointmentWithDoctor(clinicId: string, patientId: string) {
-  const upcoming = await getUpcomingAppointment(clinicId, patientId);
-  if (!upcoming) return null;
-
-  const [doctor] = await db
-    .select({ fullName: doctors.fullName })
-    .from(doctors)
-    .where(eq(doctors.id, upcoming.doctorId))
+    )
     .limit(1);
-
-  const date = new Date(upcoming.startsAt).toISOString().slice(0, 10);
-  const time = new Date(upcoming.startsAt).toTimeString().slice(0, 5);
-  return {
-    date,
-    time,
-    doctorName: doctor?.fullName ?? 'Doktor',
-  };
+  return !conflict;
 }
 
-function buildCallerMessage(
-  profile: Omit<CallerProfile, 'message'>,
-  language?: string,
-): string {
-  const en = language?.toLowerCase().startsWith('en');
-
-  if (profile.ambiguous && profile.matchedNames?.length) {
-    const names = profile.matchedNames.join(', ');
-    return en
-      ? `Multiple patients share this phone number: ${names}. Ask who is calling.`
-      : `Na ovom broju telefona vise pacijenata: ${names}. Pitaj ko telefonira.`;
+/** True for the `no_doctor_overlap` exclusion constraint (23P01), however it is wrapped. */
+export function isOverlapViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current && typeof current === 'object' && depth < 5; depth++) {
+    if ((current as { code?: unknown }).code === '23P01') return true;
+    current = (current as { cause?: unknown }).cause;
   }
-
-  if (profile.callerType === 'unknown') {
-    return en
-      ? 'New caller - not in the system. Ask for full name before booking.'
-      : 'Novi pozivatelj - nije u bazi. Pitaj ime i prezime prije zakazivanja.';
-  }
-
-  const name = profile.patientName ?? '';
-  const first = profile.firstName ?? name;
-
-  if (profile.callerType === 'new') {
-    return en
-      ? `Patient ${name} is on file but has no prior visits. Confirm their identity briefly.`
-      : `Pacijent ${name} je u bazi ali nema prethodnih posjeta. Kratko potvrdi identitet.`;
-  }
-
-  const upcoming = profile.upcomingAppointment;
-  if (upcoming) {
-    return en
-      ? `Returning patient: ${name}. Next appointment ${upcoming.date} at ${upcoming.time} with ${upcoming.doctorName}. Greet ${first} by name and confirm identity once.`
-      : `Poznat pacijent: ${name}. Sljedeci termin ${upcoming.date} u ${upcoming.time} kod ${upcoming.doctorName}. Pozdravi ${first} po imenu i kratko potvrdi identitet.`;
-  }
-
-  return en
-    ? `Returning patient: ${name}. No upcoming appointment. Greet ${first} by name and confirm identity once.`
-    : `Poznat pacijent: ${name}. Nema zakazanog termina. Pozdravi ${first} po imenu i kratko potvrdi identitet.`;
+  return false;
 }
 
-export async function lookupCallerProfile(params: {
+async function freeSlotOrNull<T>(attempt: () => Promise<T | null>): Promise<T | null> {
+  try {
+    return await attempt();
+  } catch (error) {
+    if (isOverlapViolation(error)) return null;
+    throw error;
+  }
+}
+
+const SLOT_PROBLEM_TEXT: Record<SlotProblem, string> = {
+  in_past: 'To vrijeme je već prošlo.',
+  closed_day: 'Tog dana ne radimo.',
+  outside_hours: 'Taj termin je van radnog vremena.',
+};
+
+async function slotFailure(params: {
+  code: VoiceErrorCode;
+  text: string;
   clinicId: string;
-  phone: string;
-  language?: string;
-}): Promise<VoiceBookingResult<CallerProfile>> {
-  const matches = await findPatientsByPhone(params.clinicId, params.phone);
-
-  if (matches.length === 0) {
-    const profile: CallerProfile = {
-      callerType: 'unknown',
-      completedVisitCount: 0,
-      message: '',
-    };
-    profile.message = buildCallerMessage(profile, params.language);
-    return { ok: true, data: profile };
-  }
-
-  if (matches.length > 1) {
-    const names = matches.map((p) => p.fullName);
-    const primary = matches[0];
-    const completedVisitCount = await countCompletedVisits(params.clinicId, primary.id);
-    const upcomingAppointment = await getUpcomingAppointmentWithDoctor(params.clinicId, primary.id);
-    const callerType: CallerType =
-      completedVisitCount > 0 || primary.status === 'active' ? 'returning' : 'new';
-
-    const profile: CallerProfile = {
-      callerType,
-      patientId: primary.id,
-      patientName: primary.fullName,
-      firstName: parseFirstName(primary.fullName),
-      upcomingAppointment: upcomingAppointment ?? undefined,
-      completedVisitCount,
-      ambiguous: true,
-      matchedNames: names,
-      message: '',
-    };
-    profile.message = buildCallerMessage(profile, params.language);
-    return { ok: true, data: profile };
-  }
-
-  const patient = matches[0];
-  const completedVisitCount = await countCompletedVisits(params.clinicId, patient.id);
-  const callerType: CallerType =
-    completedVisitCount > 0 || patient.status === 'active' ? 'returning' : 'new';
-  const upcomingAppointment = await getUpcomingAppointmentWithDoctor(params.clinicId, patient.id);
-
-  const profile: CallerProfile = {
-    callerType,
-    patientId: patient.id,
-    patientName: patient.fullName,
-    firstName: parseFirstName(patient.fullName),
-    upcomingAppointment: upcomingAppointment ?? undefined,
-    completedVisitCount,
-    message: '',
-  };
-  profile.message = buildCallerMessage(profile, params.language);
-  return { ok: true, data: profile };
+  doctors: Doctor[];
+  durationMin: number;
+  date: string;
+  time: string;
+  settings: ClinicSettings;
+}): Promise<VoiceResult<never>> {
+  const today = todayInZone(params.settings.timezone);
+  const alternatives = await findSlots({
+    clinicId: params.clinicId,
+    doctors: params.doctors,
+    durationMin: params.durationMin,
+    fromDate: params.date > today ? params.date : today,
+    onlyThatDay: false,
+    nearTime: params.time,
+    limit: 3,
+  });
+  const offer =
+    alternatives.length > 0
+      ? ` Ponudi: ${alternatives.map((s) => `${s.spoken} (${s.doctor})`).join('; ')}.`
+      : ' Nema drugih slobodnih termina u naredne dvije sedmice. Ponudi take_message.';
+  return { ok: false, code: params.code, error: params.text + offer, alternatives };
 }
 
-function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-}
+export type BookedAppointment = {
+  appointmentId: string;
+  date: string;
+  time: string;
+  doctorName: string;
+  patientName: string;
+  patientRegistered: boolean;
+  alreadyBooked: boolean;
+  message: string;
+};
 
-async function resolveDoctor(clinicId: string, doctorId?: string) {
-  if (doctorId) {
-    if (isUuid(doctorId)) {
-      const [doctor] = await db
-        .select({ id: doctors.id, fullName: doctors.fullName })
-        .from(doctors)
-        .where(and(eq(doctors.clinicId, clinicId), eq(doctors.id, doctorId), eq(doctors.isActive, true)))
-        .limit(1);
-      if (doctor) return doctor;
-    } else {
-      const [doctor] = await db
-        .select({ id: doctors.id, fullName: doctors.fullName })
-        .from(doctors)
-        .where(
-          and(
-            eq(doctors.clinicId, clinicId),
-            ilike(doctors.fullName, `%${doctorId}%`),
-            eq(doctors.isActive, true),
-          ),
-        )
-        .limit(1);
-      if (doctor) return doctor;
+export async function bookAppointment(params: {
+  ctx: VoiceContext;
+  date: string;
+  time: string;
+  doctor?: string;
+  treatment?: string;
+  patientName?: string;
+  spokenPhone?: string;
+}): Promise<VoiceResult<BookedAppointment>> {
+  const { ctx, date, time } = params;
+  const settings = await getClinicSettings(ctx.clinicId);
+  const startsAt = zonedToUtc(date, time, settings.timezone);
+  if (!startsAt) {
+    return { ok: false, code: 'invalid_datetime', error: 'Neispravan datum (YYYY-MM-DD) ili vrijeme (HH:MM).' };
+  }
+
+  const [doctorPick, treatmentPick, patientPick] = await Promise.all([
+    pickDoctors(ctx.clinicId, params.doctor),
+    pickTreatment(ctx.clinicId, params.treatment),
+    resolveBookingPatient({
+      clinicId: ctx.clinicId,
+      callerNumber: ctx.callerNumber,
+      spokenName: params.patientName,
+      spokenPhone: params.spokenPhone,
+    }),
+  ]);
+  if (!doctorPick.ok) return doctorPick;
+  if (!treatmentPick.ok) return treatmentPick;
+  if (!patientPick.ok) return patientPick;
+
+  const { treatment } = treatmentPick;
+  const who = patientPick.value;
+  const durationMin = treatment?.durationMin ?? DEFAULT_DURATION_MIN;
+  const endsAt = new Date(startsAt.getTime() + durationMin * 60_000);
+  const failure = { clinicId: ctx.clinicId, doctors: doctorPick.doctors, durationMin, date, time, settings };
+
+  const problem = findSlotProblem({ startsAt, endsAt, weekHours: settings.weekHours, timeZone: settings.timezone });
+  if (problem) return slotFailure({ ...failure, code: problem, text: SLOT_PROBLEM_TEXT[problem] });
+
+  // A retried tool call must confirm the first booking, not create a second one.
+  if (who.kind === 'existing') {
+    const [same] = await db
+      .select({ id: appointments.id, doctorName: doctors.fullName })
+      .from(appointments)
+      .innerJoin(doctors, eq(appointments.doctorId, doctors.id))
+      .where(
+        and(
+          eq(appointments.clinicId, ctx.clinicId),
+          eq(appointments.patientId, who.patient.id),
+          eq(appointments.startsAt, startsAt),
+          inArray(appointments.status, ['confirmed', 'arrived']),
+        ),
+      )
+      .limit(1);
+    if (same) {
+      const message = `Termin je već potvrđen: ${speakSlot(date, time)}, ${same.doctorName}.`;
+      return {
+        ok: true,
+        data: {
+          appointmentId: same.id,
+          date,
+          time,
+          doctorName: same.doctorName,
+          patientName: who.patient.fullName,
+          patientRegistered: false,
+          alreadyBooked: true,
+          message,
+        },
+      };
     }
   }
 
-  const [doctor] = await db
-    .select({ id: doctors.id, fullName: doctors.fullName })
-    .from(doctors)
-    .where(and(eq(doctors.clinicId, clinicId), eq(doctors.isActive, true)))
-    .orderBy(doctors.fullName)
-    .limit(1);
+  for (const doctor of doctorPick.doctors) {
+    const created = await freeSlotOrNull(() =>
+      db.transaction(async (tx) => {
+        if (!(await lockDoctorAndCheckFree(tx, { doctorId: doctor.id, startsAt, endsAt }))) return null;
 
-  return doctor ?? null;
+        let patientId: string;
+        if (who.kind === 'new') {
+          const [row] = await tx
+            .insert(patients)
+            .values({ clinicId: ctx.clinicId, fullName: who.fullName, phone: who.phone, status: 'new' })
+            .returning({ id: patients.id });
+          patientId = row.id;
+        } else {
+          patientId = who.patient.id;
+          if (who.renameTo) {
+            await tx
+              .update(patients)
+              .set({ fullName: who.renameTo, updatedAt: new Date() })
+              .where(eq(patients.id, patientId));
+          }
+        }
+
+        const [row] = await tx
+          .insert(appointments)
+          .values({
+            clinicId: ctx.clinicId,
+            patientId,
+            doctorId: doctor.id,
+            treatmentTypeId: treatment?.id ?? null,
+            startsAt,
+            endsAt,
+            status: 'confirmed',
+            source: 'voice_ai',
+            amountCharged: treatment?.price ?? null,
+            amountPaid: 0,
+            paymentStatus: 'pending',
+            notes: 'Kreirano putem AI telefonskog poziva',
+          })
+          .returning({ id: appointments.id });
+        return { appointmentId: row.id, patientId };
+      }),
+    );
+    if (!created) continue;
+
+    const patientName = who.kind === 'new' ? who.fullName : (who.renameTo ?? who.patient.fullName);
+    const message = `Termin je potvrđen: ${speakSlot(date, time)}, ${doctor.fullName}, pacijent ${patientName}.`;
+    await tryRecordCall(ctx, {
+      patientId: created.patientId,
+      appointmentId: created.appointmentId,
+      outcome: 'booked',
+      summary: message,
+    });
+    return {
+      ok: true,
+      data: {
+        appointmentId: created.appointmentId,
+        date,
+        time,
+        doctorName: doctor.fullName,
+        patientName,
+        patientRegistered: who.kind === 'new',
+        alreadyBooked: false,
+        message,
+      },
+    };
+  }
+
+  return slotFailure({ ...failure, code: 'slot_unavailable', text: `Termin ${speakSlot(date, time)} je zauzet.` });
 }
 
-async function getUpcomingAppointment(clinicId: string, patientId: string) {
-  const [upcoming] = await db
+type UpcomingAppointment = {
+  id: string;
+  startsAt: Date;
+  endsAt: Date;
+  doctorId: string;
+  doctorName: string;
+  doctorSpecialty: string;
+};
+
+async function getUpcoming(clinicId: string, patientId: string): Promise<UpcomingAppointment[]> {
+  return db
     .select({
       id: appointments.id,
-      doctorId: appointments.doctorId,
       startsAt: appointments.startsAt,
+      endsAt: appointments.endsAt,
+      doctorId: appointments.doctorId,
+      doctorName: doctors.fullName,
+      doctorSpecialty: doctors.specialty,
     })
     .from(appointments)
+    .innerJoin(doctors, eq(appointments.doctorId, doctors.id))
     .where(
       and(
         eq(appointments.clinicId, clinicId),
@@ -349,388 +444,186 @@ async function getUpcomingAppointment(clinicId: string, patientId: string) {
       ),
     )
     .orderBy(appointments.startsAt)
-    .limit(1);
-
-  return upcoming ?? null;
+    .limit(10);
 }
 
-async function withOptionalCallRecord<T>(operation: string, fn: () => Promise<T>): Promise<T | null> {
-  try {
-    return await fn();
-  } catch (error) {
-    console.warn(`[voice] call record skipped (${operation}):`, error instanceof Error ? error.message : error);
-    return null;
+/** The caller's appointment, asking for the date when there is more than one. */
+async function pickUpcoming(
+  ctx: VoiceContext,
+  patientId: string,
+  timeZone: string,
+  appointmentDate?: string,
+): Promise<{ ok: true; appointment: UpcomingAppointment } | Failure> {
+  const all = await getUpcoming(ctx.clinicId, patientId);
+  const matching = appointmentDate
+    ? all.filter((a) => toZonedParts(a.startsAt, timeZone).date === appointmentDate)
+    : all;
+  if (matching.length === 1) return { ok: true, appointment: matching[0] };
+  if (all.length === 0) {
+    return { ok: false, code: 'no_upcoming_appointment', error: 'Pacijent nema zakazanih termina.' };
   }
-}
-
-export async function upsertCallRecord(ctx: VoiceBookingContext, patch: {
-  patientId?: string | null;
-  outcome?: string;
-  summary?: string;
-  appointmentId?: string | null;
-  status?: 'in_progress' | 'completed';
-}) {
-  await withOptionalCallRecord('upsert', async () => {
-    const now = new Date();
-    const [existing] = await db
-      .select({ id: calls.id })
-      .from(calls)
-      .where(eq(calls.providerCallId, ctx.providerCallId))
-      .limit(1);
-
-    if (!existing) {
-      await db.insert(calls).values({
-        clinicId: ctx.clinicId,
-        patientId: patch.patientId ?? null,
-        appointmentId: patch.appointmentId ?? null,
-        provider: ctx.provider,
-        providerCallId: ctx.providerCallId,
-        direction: 'inbound',
-        status: patch.status ?? 'in_progress',
-        fromNumber: ctx.fromNumber ?? null,
-        language: ctx.language ?? 'bs-BA',
-        outcome: patch.outcome ?? null,
-        summary: patch.summary ?? null,
-        startedAt: now,
-        endedAt: patch.status === 'completed' ? now : null,
-      });
-      return;
-    }
-
-    await db
-      .update(calls)
-      .set({
-        patientId: patch.patientId ?? undefined,
-        appointmentId: patch.appointmentId ?? undefined,
-        outcome: patch.outcome ?? undefined,
-        summary: patch.summary ?? undefined,
-        status: patch.status ?? undefined,
-        updatedAt: now,
-        ...(patch.status === 'completed' ? { endedAt: now } : {}),
-      })
-      .where(eq(calls.id, existing.id));
+  const listed = all.map((a) => {
+    const parts = toZonedParts(a.startsAt, timeZone);
+    return `${speakSlot(parts.date, parts.time)} (${parts.date})`;
   });
-}
-
-export async function checkVoiceAvailability(params: {
-  clinicId: string;
-  date?: string;
-  doctorId?: string;
-  durationMin?: number;
-  limit?: number;
-}): Promise<VoiceBookingResult<{ slots: TimeSlot[]; doctorId: string; doctorName: string }>> {
-  const doctor = await resolveDoctor(params.clinicId, params.doctorId);
-  if (!doctor) {
-    return { ok: false, error: 'Nema dostupnog doktora u klinici.', code: 'doctor_not_found' };
-  }
-
-  const durationMin = params.durationMin ?? 30;
-  const limit = params.limit ?? 5;
-  const fromDate = params.date ?? new Date().toISOString().slice(0, 10);
-
-  const slots = params.date
-    ? (await getAvailableSlots(params.clinicId, doctor.id, params.date, durationMin)).slice(0, limit)
-    : await getNextAvailableSlots(params.clinicId, doctor.id, fromDate, durationMin, limit);
-
-  if (slots.length === 0) {
-    return {
-      ok: false,
-      error: 'Nema slobodnih termina u trazenom periodu.',
-      code: 'no_slots',
-    };
-  }
-
   return {
-    ok: true,
-    data: { slots, doctorId: doctor.id, doctorName: doctor.fullName },
+    ok: false,
+    code: 'multiple_appointments',
+    error: `Pitaj na koji termin misli: ${listed.join('; ')}. Zatim pošalji appointment_date. Ako ih je više istog dana, ponudi take_message.`,
   };
 }
 
-export async function bookVoiceAppointment(params: {
-  ctx: VoiceBookingContext;
-  patientId: string;
-  date: string;
-  time: string;
-  doctorId?: string;
-  durationMin?: number;
-  notes?: string;
-  idempotencyKey?: string;
-}): Promise<
-  VoiceBookingResult<{
-    appointmentId: string;
-    date: string;
-    time: string;
-    doctorName: string;
-    message: string;
-  }>
-> {
-  if (params.idempotencyKey) {
-    const existingCall = await withOptionalCallRecord('idempotency', async () => {
-      const [row] = await db
-        .select({ appointmentId: calls.appointmentId, outcome: calls.outcome })
-        .from(calls)
-        .where(
-          and(
-            eq(calls.providerCallId, params.ctx.providerCallId),
-            eq(calls.outcome, 'booked'),
-          ),
-        )
-        .limit(1);
-      return row ?? null;
-    });
-
-    if (existingCall?.appointmentId) {
-      const [appt] = await db
-        .select({
-          id: appointments.id,
-          startsAt: appointments.startsAt,
-          doctorId: appointments.doctorId,
-        })
-        .from(appointments)
-        .where(eq(appointments.id, existingCall.appointmentId))
-        .limit(1);
-
-      if (appt) {
-        const [doctor] = await db
-          .select({ fullName: doctors.fullName })
-          .from(doctors)
-          .where(eq(doctors.id, appt.doctorId))
-          .limit(1);
-
-        const date = new Date(appt.startsAt).toISOString().slice(0, 10);
-        const time = new Date(appt.startsAt).toTimeString().slice(0, 5);
-        return {
-          ok: true,
-          data: {
-            appointmentId: appt.id,
-            date,
-            time,
-            doctorName: doctor?.fullName ?? 'Doktor',
-            message: `Termin je vec potvrden: ${date} u ${time}.`,
-          },
-        };
-      }
-    }
-  }
-
-  const doctor = await resolveDoctor(params.ctx.clinicId, params.doctorId);
-  if (!doctor) {
-    return { ok: false, error: 'Nema dostupnog doktora u klinici.', code: 'doctor_not_found' };
-  }
-
-  const durationMin = params.durationMin ?? 30;
-  const startsAt = parseDateTime(params.date, params.time);
-  if (!startsAt) {
-    return { ok: false, error: 'Neispravan datum ili vrijeme.', code: 'invalid_datetime' };
-  }
-
-  const endsAt = new Date(startsAt.getTime() + durationMin * 60000);
-  const overlap = await checkNoOverlap(params.ctx.clinicId, doctor.id, startsAt, endsAt);
-
-  if (overlap.hasOverlap) {
-    const alternatives = await getNextAvailableSlots(
-      params.ctx.clinicId,
-      doctor.id,
-      params.date,
-      durationMin,
-      3,
-    );
-    const altText =
-      alternatives.length > 0
-        ? ` Predlozeni termini: ${alternatives.map((s) => `${s.date} ${s.start}`).join(', ')}.`
-        : '';
-    await upsertCallRecord(params.ctx, {
-      patientId: params.patientId,
-      outcome: 'book_conflict',
-      summary: `Trazeni termin zauzet.${altText}`,
-    });
-    return {
-      ok: false,
-      error: `Trazeni termin ${params.date} ${params.time} je zauzet.${altText}`,
-      code: 'slot_unavailable',
-    };
-  }
-
-  const [created] = await db
-    .insert(appointments)
-    .values({
-      clinicId: params.ctx.clinicId,
-      patientId: params.patientId,
-      doctorId: doctor.id,
-      startsAt,
-      endsAt,
-      status: 'confirmed',
-      source: 'voice_ai',
-      amountPaid: 0,
-      paymentStatus: 'pending',
-      notes: params.notes ?? 'Kreirano putem AI telefonskog poziva',
-    })
-    .returning({ id: appointments.id });
-
-  const message = `Termin potvrden za ${params.date} u ${params.time} kod ${doctor.fullName}.`;
-  await upsertCallRecord(params.ctx, {
-    patientId: params.patientId,
-    appointmentId: created.id,
-    outcome: 'booked',
-    summary: message,
-  });
-
-  return {
-    ok: true,
-    data: {
-      appointmentId: created.id,
-      date: params.date,
-      time: params.time,
-      doctorName: doctor.fullName,
-      message,
-    },
-  };
-}
-
-export async function cancelVoiceAppointment(params: {
-  ctx: VoiceBookingContext;
-  patientId: string;
+export async function cancelAppointment(params: {
+  ctx: VoiceContext;
+  patientName?: string;
+  appointmentDate?: string;
   reason?: string;
-}): Promise<VoiceBookingResult<{ appointmentId: string; message: string }>> {
-  const upcoming = await getUpcomingAppointment(params.ctx.clinicId, params.patientId);
-  if (!upcoming) {
-    return {
-      ok: false,
-      error: 'Pacijent nema nadolazeceg termina za otkazivanje.',
-      code: 'no_upcoming_appointment',
-    };
-  }
+}): Promise<VoiceResult<{ appointmentId: string; message: string }>> {
+  const { ctx } = params;
+  const verified = await resolveVerifiedPatient(ctx.clinicId, ctx.callerNumber, params.patientName);
+  if (!verified.ok) return verified;
+
+  const { timezone } = await getClinicSettings(ctx.clinicId);
+  const picked = await pickUpcoming(ctx, verified.patient.id, timezone, params.appointmentDate);
+  if (!picked.ok) return picked;
 
   await db
     .update(appointments)
-    .set({
-      status: 'cancelled',
-      cancelledReason: params.reason ?? 'Otkazano telefonski',
-      updatedAt: new Date(),
-    })
-    .where(eq(appointments.id, upcoming.id));
+    .set({ status: 'cancelled', cancelledReason: params.reason ?? 'Otkazano telefonski (AI)', updatedAt: new Date() })
+    .where(and(eq(appointments.id, picked.appointment.id), eq(appointments.clinicId, ctx.clinicId)));
 
-  const message = 'Termin je uspjesno otkazan.';
-  await upsertCallRecord(params.ctx, {
-    patientId: params.patientId,
-    appointmentId: upcoming.id,
+  const parts = toZonedParts(picked.appointment.startsAt, timezone);
+  const message = `Otkazan je termin: ${speakSlot(parts.date, parts.time)}.`;
+  await tryRecordCall(ctx, {
+    patientId: verified.patient.id,
+    appointmentId: picked.appointment.id,
     outcome: 'cancelled',
     summary: message,
   });
-
-  return { ok: true, data: { appointmentId: upcoming.id, message } };
+  return { ok: true, data: { appointmentId: picked.appointment.id, message } };
 }
 
-export async function rescheduleVoiceAppointment(params: {
-  ctx: VoiceBookingContext;
-  patientId: string;
-  date?: string;
-  time?: string;
-  durationMin?: number;
-}): Promise<
-  VoiceBookingResult<{
-    appointmentId: string;
-    date: string;
-    time: string;
-    message: string;
-  }>
-> {
-  const upcoming = await getUpcomingAppointment(params.ctx.clinicId, params.patientId);
-  if (!upcoming) {
-    return {
-      ok: false,
-      error: 'Pacijent nema nadolazeceg termina za pomjeranje.',
-      code: 'no_upcoming_appointment',
-    };
+export async function rescheduleAppointment(params: {
+  ctx: VoiceContext;
+  date: string;
+  time: string;
+  patientName?: string;
+  appointmentDate?: string;
+}): Promise<VoiceResult<{ appointmentId: string; date: string; time: string; message: string }>> {
+  const { ctx, date, time } = params;
+  const verified = await resolveVerifiedPatient(ctx.clinicId, ctx.callerNumber, params.patientName);
+  if (!verified.ok) return verified;
+
+  const settings = await getClinicSettings(ctx.clinicId);
+  const startsAt = zonedToUtc(date, time, settings.timezone);
+  if (!startsAt) {
+    return { ok: false, code: 'invalid_datetime', error: 'Neispravan datum (YYYY-MM-DD) ili vrijeme (HH:MM).' };
   }
 
-  const durationMin = params.durationMin ?? 30;
+  const picked = await pickUpcoming(ctx, verified.patient.id, settings.timezone, params.appointmentDate);
+  if (!picked.ok) return picked;
+  const { appointment } = picked;
 
-  if (params.date && params.time) {
-    const startsAt = parseDateTime(params.date, params.time);
-    if (!startsAt) {
-      return { ok: false, error: 'Neispravan datum ili vrijeme.', code: 'invalid_datetime' };
-    }
-    const endsAt = new Date(startsAt.getTime() + durationMin * 60000);
-    const overlap = await checkNoOverlap(
-      params.ctx.clinicId,
-      upcoming.doctorId,
-      startsAt,
-      endsAt,
-      upcoming.id,
-    );
-    if (overlap.hasOverlap) {
-      const alternatives = await getNextAvailableSlots(
-        params.ctx.clinicId,
-        upcoming.doctorId,
-        params.date,
-        durationMin,
-        3,
-      );
-      const altText =
-        alternatives.length > 0
-          ? ` Predlozi: ${alternatives.map((s) => `${s.date} ${s.start}`).join(', ')}.`
-          : '';
-      return {
-        ok: false,
-        error: `Termin ${params.date} ${params.time} je zauzet.${altText}`,
-        code: 'slot_unavailable',
-      };
-    }
+  const durationMs = appointment.endsAt.getTime() - appointment.startsAt.getTime();
+  const endsAt = new Date(startsAt.getTime() + durationMs);
+  const failure = {
+    clinicId: ctx.clinicId,
+    doctors: [{ id: appointment.doctorId, fullName: appointment.doctorName, specialty: appointment.doctorSpecialty }],
+    durationMin: Math.max(5, Math.round(durationMs / 60_000)),
+    date,
+    time,
+    settings,
+  };
 
-    await db
-      .update(appointments)
-      .set({ startsAt, endsAt, status: 'confirmed', updatedAt: new Date() })
-      .where(eq(appointments.id, upcoming.id));
+  const problem = findSlotProblem({ startsAt, endsAt, weekHours: settings.weekHours, timeZone: settings.timezone });
+  if (problem) return slotFailure({ ...failure, code: problem, text: SLOT_PROBLEM_TEXT[problem] });
 
-    const message = `Termin pomjeren na ${params.date} u ${params.time}.`;
-    await upsertCallRecord(params.ctx, {
-      patientId: params.patientId,
-      appointmentId: upcoming.id,
-      outcome: 'rescheduled',
-      summary: message,
-    });
-
-    return {
-      ok: true,
-      data: { appointmentId: upcoming.id, date: params.date, time: params.time, message },
-    };
-  }
-
-  const fromDate = params.date ?? new Date().toISOString().slice(0, 10);
-  const slots = await getNextAvailableSlots(
-    params.ctx.clinicId,
-    upcoming.doctorId,
-    fromDate,
-    durationMin,
-    1,
+  const moved = await freeSlotOrNull(() =>
+    db.transaction(async (tx) => {
+      const free = await lockDoctorAndCheckFree(tx, {
+        doctorId: appointment.doctorId,
+        startsAt,
+        endsAt,
+        excludeId: appointment.id,
+      });
+      if (!free) return null;
+      const [row] = await tx
+        .update(appointments)
+        .set({ startsAt, endsAt, status: 'confirmed', updatedAt: new Date() })
+        .where(and(eq(appointments.id, appointment.id), eq(appointments.clinicId, ctx.clinicId)))
+        .returning({ id: appointments.id });
+      return row ?? null;
+    }),
   );
-  const next = slots[0];
-  if (!next) {
-    return { ok: false, error: 'Nema slobodnih termina za pomjeranje.', code: 'no_slots' };
+  if (!moved) {
+    return slotFailure({ ...failure, code: 'slot_unavailable', text: `Termin ${speakSlot(date, time)} je zauzet.` });
   }
 
-  const startsAt = parseDateTime(next.date, next.start);
-  const endsAt = parseDateTime(next.date, next.end);
-  if (!startsAt || !endsAt) {
-    return { ok: false, error: 'Neispravan predlozeni termin.', code: 'invalid_datetime' };
-  }
-
-  await db
-    .update(appointments)
-    .set({ startsAt, endsAt, status: 'confirmed', updatedAt: new Date() })
-    .where(eq(appointments.id, upcoming.id));
-
-  const message = `Termin pomjeren na ${next.date} u ${next.start}.`;
-  await upsertCallRecord(params.ctx, {
-    patientId: params.patientId,
-    appointmentId: upcoming.id,
+  const message = `Termin je pomjeren: ${speakSlot(date, time)}, ${appointment.doctorName}.`;
+  await tryRecordCall(ctx, {
+    patientId: verified.patient.id,
+    appointmentId: appointment.id,
     outcome: 'rescheduled',
     summary: message,
   });
+  return { ok: true, data: { appointmentId: appointment.id, date, time, message } };
+}
+
+export type CallerProfile = {
+  callerType: 'unknown' | 'new' | 'returning' | 'shared_number';
+  firstName: string;
+  message: string;
+};
+
+/** Reveals details only for a caller ID that belongs to exactly one patient. */
+export async function identifyCaller(ctx: VoiceContext): Promise<CallerProfile> {
+  const matches = await findPatientsByPhone(ctx.clinicId, ctx.callerNumber);
+
+  if (matches.length === 0) {
+    return {
+      callerType: 'unknown',
+      firstName: '',
+      message: ctx.callerNumber
+        ? 'Novi pozivalac. Prije zakazivanja pitaj ime i prezime.'
+        : 'Broj pozivaoca nije vidljiv. Prije zakazivanja pitaj ime, prezime i broj telefona.',
+    };
+  }
+  if (matches.length > 1) {
+    return {
+      callerType: 'shared_number',
+      firstName: '',
+      message: 'Više pacijenata koristi ovaj broj. Pitaj za koga se zove (ime i prezime).',
+    };
+  }
+
+  const [patient] = matches;
+  const firstName = patient.fullName.trim().split(/\s+/)[0] ?? '';
+  const { timezone } = await getClinicSettings(ctx.clinicId);
+  const [upcoming, visits] = await Promise.all([
+    getUpcoming(ctx.clinicId, patient.id),
+    db
+      .select({ total: count() })
+      .from(appointments)
+      .where(
+        and(
+          eq(appointments.clinicId, ctx.clinicId),
+          eq(appointments.patientId, patient.id),
+          eq(appointments.status, 'completed'),
+        ),
+      ),
+  ]);
+  const returning = (visits[0]?.total ?? 0) > 0 || patient.status === 'active';
+  const next = upcoming[0] ? toZonedParts(upcoming[0].startsAt, timezone) : null;
+
+  await tryRecordCall(ctx, { patientId: patient.id });
 
   return {
-    ok: true,
-    data: { appointmentId: upcoming.id, date: next.date, time: next.start, message },
+    callerType: returning ? 'returning' : 'new',
+    firstName,
+    message:
+      `Pacijent u bazi: ${patient.fullName}. Potvrdi da razgovaraš s tom osobom. ` +
+      (next
+        ? `Sljedeći termin: ${speakSlot(next.date, next.time)}, ${upcoming[0].doctorName}.`
+        : 'Nema zakazanih termina.'),
   };
 }

@@ -1,11 +1,12 @@
 import { db } from '@/db';
 import { appointments, patients, doctors, messages, automations, clinics } from '@/db/schema';
 import type { AutomationTypeName } from '@/db/schema/automations';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray } from 'drizzle-orm';
 import { sendMessage, sendMessageWithCascade, buildMessageContent, getAutomationChannel } from '@/lib/messaging';
 import { sendTemplateMessage } from '@/lib/channels/whatsapp';
 import type { SendMessageJobData } from '@/lib/queue';
 import { getClinicSettings } from '@/db/queries/clinics';
+import { isReminderDue, reminderWindowStart } from '@/lib/reminder-window';
 
 /**
  * The Meta-approved WhatsApp template that carries the 48 h appointment reminder
@@ -56,22 +57,30 @@ export async function processSendMessage(data: SendMessageJobData) {
   }
 
   let doctorName = '';
+  let startsAt: Date | null = null;
   let date = '';
   let time = '';
 
   if (appointmentId) {
     const [apt] = await db
-      .select({ startsAt: appointments.startsAt, doctorId: appointments.doctorId })
+      .select({ startsAt: appointments.startsAt, doctorId: appointments.doctorId, status: appointments.status })
       .from(appointments)
       .where(eq(appointments.id, appointmentId))
       .limit(1);
 
+    if ((type === 'reminder_48h' || type === 'reminder_2h') && (!apt || !isReminderDue(apt, type))) {
+      console.log(`Skipping ${type}: appointment cancelled, moved or already started`, appointmentId);
+      return;
+    }
+
     if (apt) {
+      startsAt = apt.startsAt;
+      const { timezone } = await getClinicSettings(clinicId);
       const [doc] = await db.select({ fullName: doctors.fullName }).from(doctors).where(eq(doctors.id, apt.doctorId)).limit(1);
       doctorName = doc?.fullName ?? '';
       const d = new Date(apt.startsAt);
-      date = d.toLocaleDateString('hr-HR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      time = d.toLocaleTimeString('hr-HR', { hour: '2-digit', minute: '2-digit' });
+      date = d.toLocaleDateString('hr-HR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: timezone });
+      time = d.toLocaleTimeString('hr-HR', { hour: '2-digit', minute: '2-digit', timeZone: timezone });
     }
   }
 
@@ -96,6 +105,7 @@ export async function processSendMessage(data: SendMessageJobData) {
           eq(messages.appointmentId, appointmentId),
           eq(messages.type, 'reminder_48h'),
           eq(messages.direction, 'outbound'),
+          ...(startsAt ? [gte(messages.createdAt, reminderWindowStart(startsAt, 'reminder_48h'))] : []),
           inArray(messages.status, ['queued', 'sent', 'delivered', 'read']),
         ),
       )
@@ -255,16 +265,6 @@ export async function processSendMessage(data: SendMessageJobData) {
       return;
     }
 
-    const [apt2h] = await db
-      .select({ status: appointments.status })
-      .from(appointments)
-      .where(eq(appointments.id, appointmentId))
-      .limit(1);
-    if (!apt2h || apt2h.status === 'cancelled') {
-      console.log('Skipping reminder_2h: appointment cancelled or missing', appointmentId);
-      return;
-    }
-
     const [confirmed] = await db
       .select({ id: messages.id })
       .from(messages)
@@ -289,6 +289,7 @@ export async function processSendMessage(data: SendMessageJobData) {
           eq(messages.appointmentId, appointmentId),
           eq(messages.type, 'reminder_2h'),
           eq(messages.direction, 'outbound'),
+          ...(startsAt ? [gte(messages.createdAt, reminderWindowStart(startsAt, 'reminder_2h'))] : []),
           inArray(messages.status, ['queued', 'sent', 'delivered', 'read']),
         ),
       )

@@ -46,7 +46,7 @@ async function main() {
         clinic_id uuid NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
         patient_id uuid REFERENCES patients(id) ON DELETE SET NULL,
         appointment_id uuid REFERENCES appointments(id) ON DELETE SET NULL,
-        provider text DEFAULT 'retell' NOT NULL,
+        provider text DEFAULT 'elevenlabs' NOT NULL,
         provider_call_id text NOT NULL UNIQUE,
         direction call_direction DEFAULT 'inbound' NOT NULL,
         status call_status DEFAULT 'initiated' NOT NULL,

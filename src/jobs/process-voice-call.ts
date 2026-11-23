@@ -1,141 +1,68 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { calls } from '@/db/schema';
-import type { VoiceEventJobData } from '@/lib/queue';
-import { findPatientByPhone, upsertCallRecord } from '@/lib/voice/booking-service';
+import type { PostCallRecord } from '@/lib/channels/voice/elevenlabs';
+import { findPatientsByPhone } from '@/lib/voice/patients';
 
-function shouldReconcileIntents() {
-  return process.env.VOICE_RECONCILE_INTENTS === 'true';
+/** Clinic already linked to this conversation by a live tool call. */
+export async function findClinicIdByConversation(conversationId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ clinicId: calls.clinicId })
+    .from(calls)
+    .where(and(eq(calls.provider, 'elevenlabs'), eq(calls.providerCallId, conversationId)))
+    .limit(1);
+  return row?.clinicId ?? null;
 }
 
-function resolveLanguage(language?: string) {
-  if (language?.toLowerCase().startsWith('en')) return 'en-US';
-  return 'bs-BA';
-}
-
-function mergeMetadata(
-  existing: Record<string, unknown> | null | undefined,
-  payload: Record<string, unknown>,
-  transcriptTurns?: VoiceEventJobData['transcriptTurns'],
-): Record<string, unknown> {
-  const base = existing && typeof existing === 'object' ? { ...existing } : {};
-  return {
-    ...base,
-    ...payload,
-    ...(transcriptTurns && transcriptTurns.length > 0 ? { transcriptTurns } : {}),
-  };
-}
-
-const DEFAULT_LOGGED_SUMMARY =
-  'Poziv zabiljezen. Zakazivanje ide preko live tool poziva tokom razgovora.';
-
-export async function processVoiceEvent(data: VoiceEventJobData) {
+/**
+ * Log a finished call. Safe to run twice for the same conversation. Never changes the
+ * patient, appointment, outcome or callback recorded during the call.
+ */
+export async function processVoiceCall(clinicId: string, record: PostCallRecord): Promise<void> {
   const now = new Date();
-  const phone = data.fromNumber ?? null;
-  const patient = phone ? await findPatientByPhone(data.clinicId, phone) : null;
-  const language = resolveLanguage(data.payload?.language as string | undefined);
-  const isEndEvent =
-    data.eventType.includes('end') ||
-    data.eventType.includes('post_call') ||
-    data.eventType.includes('transcription') ||
-    (data.payload?.data &&
-      typeof data.payload.data === 'object' &&
-      (data.payload.data as { status?: string }).status === 'done');
+  const matches = await findPatientsByPhone(clinicId, record.callerNumber);
+  const patientId = matches.length === 1 ? matches[0].id : null;
+  const metadata = { transcriptTurns: record.turns, callSuccessful: record.callSuccessful };
 
-  const [existingCall] = await db
-    .select({
-      id: calls.id,
-      outcome: calls.outcome,
-      transcript: calls.transcript,
-      summary: calls.summary,
-      metadata: calls.metadata,
+  const rows = await db
+    .insert(calls)
+    .values({
+      clinicId,
+      patientId,
+      provider: 'elevenlabs',
+      providerCallId: record.conversationId,
+      direction: record.direction,
+      status: record.failed ? 'failed' : 'completed',
+      fromNumber: record.callerNumber,
+      toNumber: record.calledNumber,
+      language: 'bs',
+      transcript: record.transcript,
+      summary: record.summary,
+      outcome: 'logged',
+      durationSec: record.durationSec,
+      metadata,
+      startedAt: record.startedAt ?? now,
+      endedAt: record.endedAt ?? now,
     })
-    .from(calls)
-    .where(eq(calls.providerCallId, data.providerCallId))
-    .limit(1);
-
-  const mergedTranscript =
-    data.transcript && data.transcript.trim()
-      ? data.transcript
-      : existingCall?.transcript ?? null;
-
-  const mergedSummary =
-    data.summary && data.summary.trim()
-      ? data.summary
-      : existingCall?.summary ?? null;
-
-  const mergedMetadata = mergeMetadata(
-    existingCall?.metadata as Record<string, unknown> | null | undefined,
-    data.payload,
-    data.transcriptTurns,
-  );
-
-  if (!existingCall) {
-    await db.insert(calls).values({
-      clinicId: data.clinicId,
-      patientId: patient?.id ?? null,
-      provider: data.provider,
-      providerCallId: data.providerCallId,
-      direction: data.direction ?? 'inbound',
-      status: isEndEvent ? 'completed' : 'in_progress',
-      fromNumber: data.fromNumber ?? null,
-      toNumber: data.toNumber ?? null,
-      transcript: mergedTranscript,
-      summary: mergedSummary,
-      language,
-      metadata: mergedMetadata,
-      durationSec: data.durationSec ?? null,
-      startedAt: now,
-      endedAt: isEndEvent ? now : null,
-    });
-  } else {
-    await db
-      .update(calls)
-      .set({
-        patientId: patient?.id ?? null,
-        transcript: mergedTranscript ?? undefined,
-        summary: mergedSummary ?? undefined,
-        status: isEndEvent ? 'completed' : 'in_progress',
-        metadata: mergedMetadata,
-        durationSec: data.durationSec ?? undefined,
+    .onConflictDoUpdate({
+      target: calls.providerCallId,
+      set: {
+        status: record.failed ? 'failed' : 'completed',
+        patientId: sql`coalesce(${calls.patientId}, excluded.patient_id)`,
+        outcome: sql`coalesce(${calls.outcome}, excluded.outcome)`,
+        summary: sql`coalesce(${calls.summary}, excluded.summary)`,
+        transcript: sql`coalesce(excluded.transcript, ${calls.transcript})`,
+        durationSec: sql`coalesce(excluded.duration_sec, ${calls.durationSec})`,
+        fromNumber: sql`coalesce(${calls.fromNumber}, excluded.from_number)`,
+        toNumber: sql`coalesce(${calls.toNumber}, excluded.to_number)`,
+        startedAt: sql`excluded.started_at`,
+        endedAt: sql`excluded.ended_at`,
+        metadata: sql`coalesce(${calls.metadata}, '{}'::jsonb) || excluded.metadata`,
         updatedAt: now,
-        ...(isEndEvent ? { endedAt: now } : {}),
-      })
-      .where(eq(calls.id, existingCall.id));
-  }
+      },
+      setWhere: eq(calls.clinicId, clinicId),
+    })
+    .returning({ id: calls.id });
 
-  if (data.reconcileOnly || !shouldReconcileIntents()) {
-    if (isEndEvent && !existingCall?.outcome) {
-      await upsertCallRecord(
-        {
-          clinicId: data.clinicId,
-          provider: data.provider,
-          providerCallId: data.providerCallId,
-          fromNumber: data.fromNumber,
-          language,
-        },
-        {
-          patientId: patient?.id ?? null,
-          status: 'completed',
-          outcome: 'logged',
-          summary: mergedSummary ?? DEFAULT_LOGGED_SUMMARY,
-        },
-      );
-    }
-    return;
-  }
-
-  const [last] = await db
-    .select({ id: calls.id, outcome: calls.outcome })
-    .from(calls)
-    .where(and(eq(calls.providerCallId, data.providerCallId)))
-    .orderBy(desc(calls.updatedAt))
-    .limit(1);
-
-  if (last && !last.outcome && isEndEvent) {
-    await db
-      .update(calls)
-      .set({ outcome: 'other', updatedAt: new Date() })
-      .where(eq(calls.id, last.id));
-  }
+  if (rows.length === 0) throw new Error('Conversation belongs to another clinic');
 }

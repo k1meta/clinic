@@ -9,12 +9,18 @@ import { revalidatePath } from 'next/cache';
 import { automations } from '@/db/schema';
 import type { BusinessVertical } from '@/lib/verticals';
 import { isBusinessVertical, VERTICAL_TEMPLATE_PACKS } from '@/lib/verticals';
+import type { WeekHours } from '@/lib/work-week';
 import type { AutomationTypeName } from '@/db/schema/automations';
 
-const workHoursSchema = z.object({
+const dayHoursSchema = z.object({
   start: z.number().int().min(0).max(23),
   end: z.number().int().min(0).max(23),
 }).refine(d => d.end > d.start, { message: 'End hour must be after start hour' });
+
+const weekHoursSchema = z.object({
+  week: z.array(dayHoursSchema.nullable()).length(7)
+    .refine(week => week.some(Boolean), { message: 'Open at least one day' }),
+});
 
 async function readClinicSettings(clinicId: string): Promise<Record<string, unknown>> {
   const [clinic] = await db
@@ -33,13 +39,13 @@ async function writeClinicSettings(clinicId: string, patch: Record<string, unkno
     .where(eq(clinics.id, clinicId));
 }
 
-export async function updateWorkHours(input: { start: number; end: number }) {
+export async function updateWorkHours(input: { week: WeekHours }) {
   const { clinicId } = await requireAdmin();
-  const parsed = workHoursSchema.safeParse(input);
+  const parsed = weekHoursSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues.map(e => e.message).join(', ') };
   }
-  await writeClinicSettings(clinicId, { workHours: parsed.data });
+  await writeClinicSettings(clinicId, { weekHours: parsed.data.week });
   revalidatePath('/settings');
   revalidatePath('/calendar');
   revalidatePath('/');

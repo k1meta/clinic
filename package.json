@@ -15,6 +15,12 @@
     "db:migrate-review-enums": "tsx --env-file=.env.local scripts/migrate-review-request-enums.ts",
     "db:migrate-engagement": "tsx --env-file=.env.local scripts/migrate-engagement-suite.ts",
     "db:migrate-user-roles": "tsx --env-file=.env.local scripts/migrate-user-roles.ts",
+    "db:migrate-voice": "tsx --env-file=.env.local scripts/migrate-voice-numbers.ts",
+    "voice:tunnel": "tsx --env-file=.env.local scripts/voice-tunnel.ts",
+    "voice:setup": "tsx --env-file=.env.local scripts/voice-setup.ts",
+    "voice:number": "tsx --env-file=.env.local scripts/voice-number.ts",
+    "voice:smoke": "tsx --env-file=.env.local scripts/voice-smoke.ts",
+    "test": "tsx --test tests/*.test.ts",
     "db:bootstrap-admin": "tsx --env-file=.env.local scripts/bootstrap-admin.ts",
     "worker": "tsx src/worker.ts",
     "tunnel": "tsx --env-file=.env.local scripts/register-webhook.ts"

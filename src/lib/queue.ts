@@ -34,28 +34,10 @@ export interface RescheduleSelectionJobData {
   durationMin: number;
 }
 
-export interface VoiceEventJobData {
-  clinicId: string;
-  provider: 'retell' | 'elevenlabs';
-  providerCallId: string;
-  eventType: string;
-  fromNumber?: string;
-  toNumber?: string;
-  direction?: 'inbound' | 'outbound';
-  transcript?: string;
-  summary?: string;
-  transcriptTurns?: Array<{ role?: string; message?: string; text?: string }>;
-  durationSec?: number;
-  payload: Record<string, unknown>;
-  /** When true, worker only logs/reconciles — booking happens via real-time tool routes. */
-  reconcileOnly?: boolean;
-}
-
 // --- Queues ---
 
 let _messagingQueue: Queue | null = null;
 let _schedulerQueue: Queue | null = null;
-let _voiceQueue: Queue | null = null;
 
 export function getMessagingQueue() {
   if (!_messagingQueue) {
@@ -71,13 +53,6 @@ export function getSchedulerQueue() {
   return _schedulerQueue;
 }
 
-export function getVoiceQueue() {
-  if (!_voiceQueue) {
-    _voiceQueue = new Queue('voice', { connection: getQueueConnection() });
-  }
-  return _voiceQueue;
-}
-
 // --- Helper to add jobs ---
 
 export type AddSendMessageJobOptions = {
@@ -85,9 +60,13 @@ export type AddSendMessageJobOptions = {
   delay?: number;
 };
 
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
 async function runSendMessageInline(data: SendMessageJobData, delayMs?: number) {
   const { processSendMessage } = await import('@/jobs/send-message');
   if (typeof delayMs === 'number' && delayMs > 0) {
+    // Node fires timers beyond 2^31-1 ms immediately. The 15-minute scan covers these.
+    if (delayMs > MAX_TIMER_MS) return { id: `inline-skipped-${Date.now()}` };
     setTimeout(() => {
       processSendMessage(data).catch((err) => {
         console.error('[queue:inline] delayed send-message failed:', err);
@@ -179,14 +158,4 @@ export async function addSendCampaignJobWithTimeout(
       );
     }),
   ]);
-}
-
-export async function addVoiceEventJob(data: VoiceEventJobData) {
-  const queue = getVoiceQueue();
-  return queue.add('process-voice-event', data, {
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 3000 },
-    removeOnComplete: 1000,
-    removeOnFail: 5000,
-  });
 }

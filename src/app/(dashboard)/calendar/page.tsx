@@ -10,6 +10,7 @@ import AppointmentModal from "@/components/AppointmentModal";
 import AppointmentStatusMenu from "@/components/AppointmentStatusMenu";
 import CalendarDatePicker from "@/components/CalendarDatePicker";
 import Link from "next/link";
+import { addDays, isValidDate, todayInZone, toZonedParts, weekdayOf } from "@/lib/timezone";
 
 const ROW_HEIGHT_PX = 96;
 const PX_PER_MIN = ROW_HEIGHT_PX / 60;
@@ -21,26 +22,11 @@ const STATUS_STYLES: Record<string, { bg: string; border: string; textColor: str
   no_show:   { bg: "bg-error/10", border: "border-error", textColor: "text-error" },
 };
 
-function formatDateParam(d: Date) {
-  // Use local time components, NOT toISOString — otherwise in TZs east of UTC
-  // a date parsed from URL as local midnight gets serialized back as the
-  // previous UTC date, making Prev/Next a no-op past tomorrow.
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 function formatHourLabel(h: number) {
   if (h === 0) return '12:00 AM';
   if (h < 12) return `${h}:00 AM`;
   if (h === 12) return '12:00 PM';
   return `${h - 12}:00 PM`;
-}
-
-function formatTime(date: Date) {
-  const d = new Date(date);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
 export default async function CalendarPage({
@@ -51,36 +37,38 @@ export default async function CalendarPage({
   const params = await searchParams;
   const clinicId = await getClinicId();
 
-  const today = new Date();
-  const selectedDate = params.date ? new Date(params.date + 'T00:00:00') : today;
-  if (isNaN(selectedDate.getTime())) selectedDate.setTime(today.getTime());
-  const dateStr = formatDateParam(selectedDate);
+  // Dates are clinic-local YYYY-MM-DD strings, never server-local Date objects.
+  const settings = await getClinicSettings(clinicId);
+  const { timezone } = settings;
+  const todayStr = todayInZone(timezone);
+  const dateStr = params.date && isValidDate(params.date) ? params.date : todayStr;
 
-  const prevDate = new Date(selectedDate);
-  prevDate.setDate(prevDate.getDate() - 1);
-  const nextDate = new Date(selectedDate);
-  nextDate.setDate(nextDate.getDate() + 1);
+  function formatTime(date: Date) {
+    return new Date(date).toLocaleTimeString('en-US', {
+      hour: 'numeric', minute: '2-digit', hour12: true, timeZone: timezone,
+    });
+  }
 
-  const [appointmentsRaw, doctors, treatmentTypes, patientsList, settings] = await Promise.all([
-    getAppointmentsByDate(clinicId, selectedDate),
+  const [appointmentsRaw, doctors, treatmentTypes, patientsList] = await Promise.all([
+    getAppointmentsByDate(clinicId, dateStr, timezone),
     getDoctorsByClinic(clinicId),
     getTreatmentTypesByClinic(clinicId),
     getAllPatients(clinicId),
-    getClinicSettings(clinicId),
   ]);
 
-  const dateLabel = selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-  const isToday = formatDateParam(selectedDate) === formatDateParam(today);
+  const dateLabel = new Date(`${dateStr}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
+  const isToday = dateStr === todayStr;
 
   // --- Dynamic grid range: configured work hours + auto-extend for out-of-hours appointments ---
+  const dayHours = settings.weekHours[weekdayOf(dateStr)];
+  const isOutsideHours = (hour: number) => !dayHours || hour < dayHours.start || hour >= dayHours.end;
   let gridStart = settings.workHours.start;
   let gridEnd = settings.workHours.end;
 
   for (const apt of appointmentsRaw) {
-    const s = new Date(apt.startsAt);
-    const e = new Date(apt.endsAt);
-    const startH = s.getHours();
-    const endH = e.getHours() + (e.getMinutes() > 0 ? 1 : 0);
+    const startH = toZonedParts(new Date(apt.startsAt), timezone).hour;
+    const e = toZonedParts(new Date(apt.endsAt), timezone);
+    const endH = e.hour + (e.minute > 0 ? 1 : 0);
     if (startH < gridStart) gridStart = startH;
     if (endH > gridEnd) gridEnd = endH;
   }
@@ -102,7 +90,7 @@ export default async function CalendarPage({
   function getPosition(startsAt: Date, endsAt: Date) {
     const start = new Date(startsAt);
     const end = new Date(endsAt);
-    const minutesSinceStart = (start.getHours() - GRID_START_HOUR) * 60 + start.getMinutes();
+    const minutesSinceStart = toZonedParts(start, timezone).minutes - GRID_START_HOUR * 60;
     const durationMin = (end.getTime() - start.getTime()) / 60000;
     return {
       top: Math.max(0, minutesSinceStart * PX_PER_MIN),
@@ -123,13 +111,13 @@ export default async function CalendarPage({
           <div className="flex items-center gap-6">
             <h2 className="text-2xl font-headline font-extrabold tracking-tight">{dateLabel}</h2>
             <div className="flex items-center bg-surface-container-low rounded-lg p-1">
-              <Link href={`/calendar?date=${formatDateParam(prevDate)}`} className="p-1.5 hover:bg-surface-container-high rounded-md transition-all">
+              <Link href={`/calendar?date=${addDays(dateStr, -1)}`} className="p-1.5 hover:bg-surface-container-high rounded-md transition-all">
                 <span className="material-symbols-outlined text-sm">chevron_left</span>
               </Link>
               <Link href="/calendar" className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${isToday ? 'bg-primary text-white shadow-sm' : 'bg-surface-container-lowest shadow-sm'}`}>
                 Today
               </Link>
-              <Link href={`/calendar?date=${formatDateParam(nextDate)}`} className="p-1.5 hover:bg-surface-container-high rounded-md transition-all">
+              <Link href={`/calendar?date=${addDays(dateStr, 1)}`} className="p-1.5 hover:bg-surface-container-high rounded-md transition-all">
                 <span className="material-symbols-outlined text-sm">chevron_right</span>
               </Link>
               <CalendarDatePicker value={dateStr} />
@@ -180,11 +168,11 @@ export default async function CalendarPage({
             <div className="flex flex-col">
               {TIME_SLOTS.map((t, idx) => {
                 const slotHour = GRID_START_HOUR + idx;
-                const isOutside = slotHour < settings.workHours.start || slotHour >= settings.workHours.end;
+                const isOutside = isOutsideHours(slotHour);
                 return (
                   <div key={t} className={`h-24 p-4 text-right border-r border-outline-variant/10 ${isOutside ? 'bg-surface-container-low/60' : ''}`}>
                     <span className={`text-xs font-medium ${isOutside ? 'text-outline italic' : 'text-on-surface-variant'}`}>{t}</span>
-                    {isOutside && <p className="text-[8px] text-outline mt-0.5">After hours</p>}
+                    {isOutside && <p className="text-[8px] text-outline mt-0.5">{dayHours ? 'After hours' : 'Closed'}</p>}
                   </div>
                 );
               })}
@@ -197,7 +185,7 @@ export default async function CalendarPage({
                   <div className="absolute inset-0 grid pointer-events-none" style={{ gridTemplateRows: `repeat(${TIME_SLOTS.length}, 1fr)` }}>
                     {TIME_SLOTS.map((_, i) => {
                       const slotHour = GRID_START_HOUR + i;
-                      const isOutside = slotHour < settings.workHours.start || slotHour >= settings.workHours.end;
+                      const isOutside = isOutsideHours(slotHour);
                       return (
                         <div key={i} className={`border-b border-outline-variant/5 ${isOutside ? 'bg-surface-container-low/40' : ''}`}></div>
                       );

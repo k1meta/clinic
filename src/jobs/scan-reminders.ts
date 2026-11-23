@@ -36,6 +36,8 @@ export async function scan48hReminders() {
                 eq(messages.appointmentId, appointments.id),
                 eq(messages.type, 'reminder_48h'),
                 eq(messages.direction, 'outbound'),
+                // Keep in step with reminderWindowStart()
+                sql`${messages.createdAt} >= ${appointments.startsAt} - interval '48 hours 5 minutes'`,
               ),
             ),
         ),
@@ -96,6 +98,8 @@ export async function scan2hReminders() {
                 eq(messages.appointmentId, appointments.id),
                 eq(messages.type, 'reminder_2h'),
                 eq(messages.direction, 'outbound'),
+                // Keep in step with reminderWindowStart()
+                sql`${messages.createdAt} >= ${appointments.startsAt} - interval '2 hours 5 minutes'`,
               ),
             ),
         ),

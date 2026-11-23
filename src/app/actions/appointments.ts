@@ -6,6 +6,8 @@ import { appointments, treatmentTypes } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { checkNoOverlap } from '@/lib/availability';
 import { getClinicId } from '@/db/queries/auth';
+import { getClinicSettings } from '@/db/queries/clinics';
+import { zonedToUtc } from '@/lib/timezone';
 import { revalidatePath } from 'next/cache';
 import { optionalPostgresUuid, postgresUuid } from '@/lib/postgres-uuid';
 
@@ -32,8 +34,9 @@ export async function createAppointment(input: CreateAppointmentInput) {
 
   const { patientId, doctorId, treatmentTypeId, date, time, durationMin, notes } = parsed.data;
 
-  const startsAt = new Date(`${date}T${time}`);
-  if (isNaN(startsAt.getTime())) {
+  const { timezone } = await getClinicSettings(clinicId);
+  const startsAt = zonedToUtc(date, time, timezone);
+  if (!startsAt) {
     return { error: 'Invalid date or time' };
   }
   const endsAt = new Date(startsAt.getTime() + durationMin * 60000);
@@ -79,16 +82,8 @@ export async function createAppointment(input: CreateAppointmentInput) {
     return { error: 'Failed to create appointment. Please try again.' };
   }
 
-  try {
-    const { schedule48hReminderIfEligible } = await import('@/lib/schedule-48h-reminder');
-    const { schedule2hReminderIfEligible } = await import('@/lib/schedule-2h-reminder');
-    await Promise.all([
-      schedule48hReminderIfEligible({ clinicId, appointmentId: newAppointmentId }),
-      schedule2hReminderIfEligible({ clinicId, appointmentId: newAppointmentId }),
-    ]);
-  } catch (e) {
-    console.error('[createAppointment] schedule reminders:', e);
-  }
+  const { scheduleAppointmentReminders } = await import('@/lib/schedule-reminders');
+  await scheduleAppointmentReminders(clinicId, newAppointmentId);
 
   revalidatePath('/');
   revalidatePath('/calendar');

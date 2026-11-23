@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { getClinicId } from '@/db/queries/auth';
 import { getUpcomingAppointments } from '@/db/queries/appointments';
+import { getClinicSettings } from '@/db/queries/clinics';
 import { getDoctorsByClinic } from '@/db/queries/doctors';
 import { getTreatmentTypesByClinic } from '@/db/queries/treatment-types';
 import { getAllPatients } from '@/db/queries/patients';
@@ -9,9 +10,10 @@ import AppointmentModal from '@/components/AppointmentModal';
 
 export default async function OverviewPage() {
   const clinicId = await getClinicId();
+  const { timezone } = await getClinicSettings(clinicId);
 
   const [upcoming, doctors, treatmentTypes, patientsList] = await Promise.all([
-    getUpcomingAppointments(clinicId, 5),
+    getUpcomingAppointments(clinicId, timezone, 5),
     getDoctorsByClinic(clinicId),
     getTreatmentTypesByClinic(clinicId),
     getAllPatients(clinicId),
@@ -22,6 +24,7 @@ export default async function OverviewPage() {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
+      timeZone: timezone,
     });
   }
 

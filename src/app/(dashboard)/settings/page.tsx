@@ -19,13 +19,6 @@ import ChangeOwnPasswordForm from '@/components/ChangeOwnPasswordForm';
 import VerticalSettingsForm from '@/components/VerticalSettingsForm';
 import { redirect } from 'next/navigation';
 
-function formatHour(h: number) {
-  if (h === 0) return '12:00 AM';
-  if (h < 12) return h + ':00 AM';
-  if (h === 12) return '12:00 PM';
-  return (h - 12) + ':00 PM';
-}
-
 export default async function SettingsPage() {
   let admin;
   try {
@@ -66,11 +59,11 @@ export default async function SettingsPage() {
             <div>
               <h2 className="font-headline font-bold text-lg text-on-surface">Work Hours</h2>
               <p className="text-[11px] text-on-surface-variant">
-                Currently {formatHour(settings.workHours.start)} &ndash; {formatHour(settings.workHours.end)} &middot; Calendar grid adjusts automatically
+                WhatsApp and the phone AI only offer appointments inside these hours.
               </p>
             </div>
           </div>
-          <WorkHoursForm currentStart={settings.workHours.start} currentEnd={settings.workHours.end} />
+          <WorkHoursForm current={settings.weekHours} />
         </div>
       </div>
 

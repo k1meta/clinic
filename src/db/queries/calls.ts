@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte } from 'drizzle-orm';
+import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
 import { db } from '..';
 import { calls, patients } from '../schema';
 
@@ -62,4 +62,24 @@ export async function getCallStatsThisWeek(clinicId: string) {
   const resolved = resolvedRow[0]?.total ?? 0;
   const resolutionRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
   return { total, resolved, resolutionRate };
+}
+
+/** Callers who asked to be called back and have not been handled yet. */
+export async function getOpenCallbacks(clinicId: string, limit: number = 20) {
+  return db
+    .select({
+      id: calls.id,
+      createdAt: calls.createdAt,
+      callback: sql<{ name?: string; phone?: string | null; message?: string }>`${calls.metadata} -> 'callback'`,
+    })
+    .from(calls)
+    .where(
+      and(
+        eq(calls.clinicId, clinicId),
+        sql`${calls.metadata} -> 'callback' is not null`,
+        sql`${calls.metadata} -> 'callback' ->> 'resolvedAt' is null`,
+      ),
+    )
+    .orderBy(desc(calls.createdAt))
+    .limit(limit);
 }

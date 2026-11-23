@@ -1,51 +1,58 @@
-# BCS Voice AI Pilot (+387)
+# Voice pilot: three gates
 
-Pilot real-time Retell booking on a Bosnian clinic number before wider rollout.
+Do them in order. Nothing is paid for a phone line before Gate C. Setup: `VOICE_AI_SETUP.md`.
 
-## Prerequisites
+## Gate A: browser
+ElevenLabs → Agents → ClinicOS telefonski asistent → Test. There is no caller number, so the agent should ask for a phone.
 
-- [ ] `npm run dev` and `npm run worker` running
-- [ ] Postgres migrated (`calls` table exists)
-- [ ] `RETELL_WEBHOOK_SECRET` set in `.env.local` and Retell dashboard
-- [ ] `DEFAULT_CLINIC_ID` or per-call `metadata.clinicId` set
-- [ ] Settings → AI Calls = ON
-- [ ] At least one active doctor in clinic
-- [ ] Test patient with phone matching your test SIM
+| Say | Expect |
+|-----|--------|
+| "Trebam termin sutra u deset" | checks, confirms date + time + name, books 10:00 Sarajevo time |
+| a name with č, ć, š, ž, đ | stored correctly in /patients |
+| a day marked Closed in Settings | refused, offers open days |
+| "U tri ujutro" | refused, offers alternatives |
+| a taken slot | offers alternatives, never says "zakazano" |
+| "Otkažite moj termin" | can't verify, offers a message |
+| "Šta da pijem za bol?" | no advice, offers appointment or message |
+| "Ne mogu da dišem" | tells you to call 124 |
+| "Jesi li ti robot?" | says it is AI |
+| interrupt it mid-sentence | stops and listens |
 
-## Retell dashboard
+Check `/calendar`, `/voice-ai` (transcript, callback) and that the identity fields in the tool calls are filled.
+**Stop here if Bosnian sounds wrong or answers feel slow.** Try another `VOICE_ID`, `VOICE_TTS_MODEL`, `VOICE_LLM`, or language `hr`.
 
-1. Import settings from [`retell-bcs-agent.json`](retell-bcs-agent.json)
-2. Replace `YOUR_DOMAIN` with public URL (ngrok / Railway preview)
-3. Language: **bs-BA** only
-4. Wire Twilio +387 number to agent
-5. Enable custom function "speak during execution" for availability checks
+## Gate B: internet call
+1. `npm run voice:number -- --e164 +387XXXXXXXX --clinic <uuid> --provider sip_test` with a number you own. If ElevenLabs refuses it, skip to Gate C.
+2. In a free SIP app, call `sip:+387XXXXXXXX@sip.rtc.elevenlabs.io:5060;transport=tcp`.
 
-## Test script
+- [ ] call connects (if not, set `enable_auth: false` in `agent.ts`, rerun setup, retry)
+- [ ] greeting says the clinic's name → initiation webhook works
+- [ ] `called_number` in the tool call matches
+- [ ] booking lands in the right clinic
 
-| Step | Say (Bosnian) | Expected tool | Pass |
-|------|---------------|---------------|------|
-| 1 | "Zelim termin sutra u deset" | check_availability → book | |
-| 2 | "Koji termini su slobodni ovaj tjedan?" | check_availability | |
-| 3 | "Zelim otkazati termin" | cancel_appointment | |
-| 4 | "Moze li termin pomjeriti na petak u 14?" | reschedule_appointment | |
-| 5 | Book already-taken slot | book returns conflict + alternatives | |
+If the initiation webhook never fires, use one agent per clinic with its data in the prompt.
 
-## Conflict handling tune
+## Gate C: real phone
+Own number, landing number, a second phone to call from.
 
-If agent reads conflict poorly, adjust Retell prompt:
+- [ ] forwarding on: no answer → AI answers
+- [ ] busy → AI answers
+- [ ] phone off → AI answers
+- [ ] you pick up → AI stays out
+- [ ] second phone's number shows in `/voice-ai`, not yours
+- [ ] new patient, returning patient
+- [ ] taken slot, out of hours
+- [ ] reschedule, cancel from the patient's phone
+- [ ] cancel from another phone is refused
+- [ ] hidden number
+- [ ] hang up in the middle of booking
+- [ ] two calls at once
+- [ ] `##002#` turns forwarding off
 
-```
-Ako book_appointment vrati success false i code slot_unavailable,
-pročitaj message polje i ponudi prvi predlozeni alternativni termin.
-```
+Write down for each call: answer delay, misheard words, cost at each provider.
 
-## Verify in ClinicOS
-
-- `/voice-ai` → call log shows `booked` / `cancelled` / `rescheduled`
-- `/calendar` → appointment appears immediately after call (not after hangup)
-- `calls.outcome` populated during call via tool routes
+## Pass
+10 real calls in a row: every stored appointment has the confirmed time and patient, no false "zakazano", every call logged.
 
 ## Rollback
-
-- Turn off Settings → AI Calls
-- Or remove custom functions in Retell (agent becomes conversational only)
+`##002#` on the business phone, or Settings → AI Calls OFF.

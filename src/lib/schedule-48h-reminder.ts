@@ -1,7 +1,8 @@
 import { db } from '@/db';
 import { appointments, automations, messages } from '@/db/schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray } from 'drizzle-orm';
 import { addSendMessageJob } from '@/lib/queue';
+import { reminderWindowStart } from '@/lib/reminder-window';
 
 /** Milliseconds from now until exactly 48 h before `startsAt`. Null if that moment has passed. */
 export function compute48hReminderDelayMs(startsAt: Date): number | null {
@@ -52,6 +53,7 @@ export async function schedule48hReminderIfEligible(params: {
         eq(messages.appointmentId, appointmentId),
         eq(messages.type, 'reminder_48h'),
         eq(messages.direction, 'outbound'),
+        gte(messages.createdAt, reminderWindowStart(new Date(apt.startsAt), 'reminder_48h')),
         inArray(messages.status, ['queued', 'sent', 'delivered', 'read']),
       ),
     )

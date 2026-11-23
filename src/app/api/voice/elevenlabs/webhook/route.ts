@@ -1,82 +1,41 @@
-import { NextRequest, NextResponse } from 'next/server';
-import {
-  getElevenLabsClinicId,
-  getElevenLabsConversationId,
-  getElevenLabsDurationSec,
-  getElevenLabsEventType,
-  getElevenLabsFromNumber,
-  getElevenLabsSummary,
-  getElevenLabsToNumber,
-  getElevenLabsTranscript,
-  getElevenLabsTranscriptTurns,
-  isElevenLabsPostCallEvent,
-  parseElevenLabsPayload,
-} from '@/lib/channels/voice/elevenlabs';
-import { getClinicSettings } from '@/db/queries/clinics';
-import { addVoiceEventJob } from '@/lib/queue';
-import { verifyElevenLabsSignature } from '@/lib/voice/tool-request';
+import { NextResponse, type NextRequest } from 'next/server';
+import { findClinicIdByConversation, processVoiceCall } from '@/jobs/process-voice-call';
+import { parsePostCall } from '@/lib/channels/voice/elevenlabs';
+import { verifyElevenLabsSignature } from '@/lib/voice/auth';
+import { logVoiceError } from '@/lib/voice/log';
+import { resolveClinicId } from '@/lib/voice/clinic-routing';
 
+/**
+ * Post-call log. Written directly, without Redis or the worker. A failed write returns
+ * 500 so ElevenLabs shows the delivery as failed and it can be redelivered.
+ */
 export async function POST(request: NextRequest) {
   const raw = await request.text();
-  const signature = request.headers.get('elevenlabs-signature');
-
-  if (!verifyElevenLabsSignature(raw, signature)) {
-    return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 });
+  if (!verifyElevenLabsSignature(raw, request.headers.get('elevenlabs-signature'))) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
 
-  let payload: ReturnType<typeof parseElevenLabsPayload>;
+  let body: unknown;
   try {
-    payload = parseElevenLabsPayload(raw);
+    body = JSON.parse(raw);
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const eventType = getElevenLabsEventType(payload);
+  const record = parsePostCall(body);
+  if (!record) return NextResponse.json({ ok: true, ignored: true });
 
-  if (!isElevenLabsPostCallEvent(payload)) {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[elevenlabs/webhook] ignored event:', eventType);
+  try {
+    const clinicId =
+      (await findClinicIdByConversation(record.conversationId)) ?? (await resolveClinicId(record.calledNumber));
+    if (!clinicId) {
+      console.warn('[voice] post-call for an unregistered number ignored');
+      return NextResponse.json({ ok: true, ignored: true });
     }
-    return NextResponse.json({ ok: true, ignored: true, eventType });
+    await processVoiceCall(clinicId, record);
+  } catch (error) {
+    logVoiceError('post-call logging failed', error);
+    return NextResponse.json({ error: 'Could not store call' }, { status: 500 });
   }
-
-  const clinicId = getElevenLabsClinicId(payload) ?? process.env.DEFAULT_CLINIC_ID ?? null;
-  if (!clinicId) {
-    return NextResponse.json(
-      { error: 'Missing clinicId in dynamic variables and DEFAULT_CLINIC_ID is not set' },
-      { status: 400 },
-    );
-  }
-
-  const settings = await getClinicSettings(clinicId);
-  if (!settings.aiCalls) {
-    return NextResponse.json({
-      ok: true,
-      aiCalls: false,
-      message: 'AI calling is disabled in clinic settings',
-    });
-  }
-
-  const conversationId = getElevenLabsConversationId(payload);
-  if (!conversationId) {
-    return NextResponse.json({ error: 'Missing conversation_id' }, { status: 400 });
-  }
-
-  await addVoiceEventJob({
-    clinicId,
-    provider: 'elevenlabs',
-    providerCallId: conversationId,
-    eventType,
-    fromNumber: getElevenLabsFromNumber(payload) ?? undefined,
-    toNumber: getElevenLabsToNumber(payload) ?? undefined,
-    direction: 'inbound',
-    transcript: getElevenLabsTranscript(payload) || undefined,
-    summary: getElevenLabsSummary(payload) || undefined,
-    transcriptTurns: getElevenLabsTranscriptTurns(payload),
-    durationSec: getElevenLabsDurationSec(payload) ?? undefined,
-    payload: payload as Record<string, unknown>,
-    reconcileOnly: true,
-  });
-
   return NextResponse.json({ ok: true });
 }

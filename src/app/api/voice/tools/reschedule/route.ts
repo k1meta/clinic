@@ -1,39 +1,22 @@
-import { NextRequest } from 'next/server';
-import {
-  buildVoiceContext,
-  readToolDate,
-  readToolDuration,
-  readToolTime,
-  resolveToolPatient,
-} from '@/lib/voice/tool-actions';
-import { rescheduleVoiceAppointment } from '@/lib/voice/booking-service';
-import { failToolJson, okToolJson, parseAuthorizedVoiceToolRequest } from '@/lib/voice/tool-route';
+import { after } from 'next/server';
+import { scheduleAppointmentReminders } from '@/lib/schedule-reminders';
+import { rescheduleAppointment } from '@/lib/voice/booking-service';
+import { readText, readTime } from '@/lib/voice/tool-request';
+import { voiceTool } from '@/lib/voice/tool-route';
 
-export async function POST(request: NextRequest) {
-  const auth = await parseAuthorizedVoiceToolRequest(request);
-  if ('error' in auth) return auth.error;
-
-  const patient = await resolveToolPatient(auth.parsed);
-  if (!patient) {
-    return failToolJson('Pacijent nije pronadjen po broju telefona.', 'patient_not_found');
-  }
-
-  const result = await rescheduleVoiceAppointment({
-    ctx: buildVoiceContext(auth.parsed),
-    patientId: patient.id,
-    date: readToolDate(auth.parsed),
-    time: readToolTime(auth.parsed),
-    durationMin: readToolDuration(auth.parsed),
+export const POST = voiceTool(async (ctx, args) => {
+  const result = await rescheduleAppointment({
+    ctx,
+    date: readText(args.date, 10) ?? '',
+    time: readTime(args.time) ?? '',
+    patientName: readText(args.patient_name, 120),
+    appointmentDate: readText(args.appointment_date, 10),
   });
-
   if (!result.ok) {
-    return failToolJson(result.error, result.code);
+    return { ok: false, code: result.code, error: result.error, data: { alternatives: result.alternatives ?? [] } };
   }
 
-  return okToolJson(result.data.message, {
-    appointmentId: result.data.appointmentId,
-    date: result.data.date,
-    time: result.data.time,
-    patientName: patient.fullName,
-  });
-}
+  const { appointmentId, date, time, message } = result.data;
+  after(() => scheduleAppointmentReminders(ctx.clinicId, appointmentId));
+  return { ok: true, message, data: { date, time } };
+});

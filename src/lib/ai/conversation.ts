@@ -3,7 +3,8 @@ import { messages, doctors, treatmentTypes, appointments } from '@/db/schema';
 import { eq, and, gte, desc } from 'drizzle-orm';
 import { generateResponse } from './llm';
 import { getAvailableSlots, getNextAvailableSlots } from '@/lib/availability';
-import type { TimeSlot } from '@/lib/availability';
+import { addDays, toZonedParts, todayInZone, zonedToUtc } from '@/lib/timezone';
+import { describeWeekBs } from '@/lib/work-week';
 
 export type ConvChannel = 'whatsapp' | 'instagram' | 'messenger';
 export type ConvIntent = 'book' | 'cancel' | 'reschedule' | 'availability' | 'identify' | 'other';
@@ -40,8 +41,8 @@ export interface HandleResult {
 interface ClinicContext {
   clinicId: string;
   clinicName: string;
-  workStart: number;
-  workEnd: number;
+  timezone: string;
+  workingHours: string;
   doctors: Array<{ id: string; fullName: string; specialty: string }>;
   treatments: Array<{ id: string; name: string; durationMin: number }>;
 }
@@ -83,8 +84,8 @@ async function loadClinicContext(clinicId: string): Promise<ClinicContext> {
   return {
     clinicId,
     clinicName: clinic?.name ?? 'Klinika',
-    workStart: settings.workHours.start,
-    workEnd: settings.workHours.end,
+    timezone: settings.timezone,
+    workingHours: describeWeekBs(settings.weekHours),
     doctors: doctorRows,
     treatments: treatmentRows,
   };
@@ -105,7 +106,7 @@ async function classifyIntent(
     'You are a JSON-only API for a medical clinic reservation system.',
     'Return ONLY a valid JSON object. No other text.',
     'Clinic: ' + ctx.clinicName,
-    'Working hours: ' + ctx.workStart + ':00-' + ctx.workEnd + ':00',
+    'Working hours: ' + ctx.workingHours,
     'Doctors: ' + doctorList,
     'Treatments: ' + treatmentList,
     'Today: ' + today,
@@ -161,7 +162,7 @@ export async function handleInboundMessage(params: {
   }
 
   const ctx = await loadClinicContext(clinicId);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInZone(ctx.timezone);
   const displayName = patientName ?? 'Pacijent';
 
   // If patient is unknown, ask them to identify
@@ -392,9 +393,7 @@ async function checkAndBook(params: {
     .sort((a, b) => a.diff - b.diff)
     .slice(0, 3);
 
-  const nextDayDate = new Date(requestedDate);
-  nextDayDate.setDate(nextDayDate.getDate() + 1);
-  const nextDaySlots = await getNextAvailableSlots(clinicId, targetDoctorId, nextDayDate.toISOString().slice(0, 10), durationMin, 3);
+  const nextDaySlots = await getNextAvailableSlots(clinicId, targetDoctorId, addDays(requestedDate, 1), durationMin, 3);
 
   const allSlots: Array<{ start: string; end: string; date: string }> = [
     ...nearbySlots.map(s => ({ start: s.start, end: s.end, date: requestedDate })),
@@ -429,8 +428,10 @@ async function bookAppointment(params: {
   treatmentTypeId?: string; durationMin: number; date: string; time: string;
 }): Promise<{ error?: string }> {
   try {
-    const startsAt = new Date(params.date + 'T' + params.time);
-    if (isNaN(startsAt.getTime())) return { error: 'Invalid date/time' };
+    const { getClinicSettings } = await import('@/db/queries/clinics');
+    const { timezone } = await getClinicSettings(params.clinicId);
+    const startsAt = zonedToUtc(params.date, params.time, timezone);
+    if (!startsAt) return { error: 'Invalid date/time' };
     const endsAt = new Date(startsAt.getTime() + params.durationMin * 60000);
     const { checkNoOverlap } = await import('@/lib/availability');
     const overlap = await checkNoOverlap(params.clinicId, params.doctorId, startsAt, endsAt);
@@ -476,14 +477,16 @@ async function getUpcomingAppointment(clinicId: string, patientId: string) {
     .limit(1);
 
   if (!appt) return null;
-  const d = new Date(appt.date);
+  const { getClinicSettings } = await import('@/db/queries/clinics');
+  const { timezone } = await getClinicSettings(clinicId);
+  const local = toZonedParts(appt.date, timezone);
   return {
     id: appt.id,
     doctorId: appt.doctorId,
     doctorName: appt.doctorName ?? 'ljekar',
     treatmentTypeId: appt.treatmentTypeId,
-    date: d.toISOString().slice(0, 10),
-    time: d.toTimeString().slice(0, 5),
+    date: local.date,
+    time: local.time,
   };
 }
 

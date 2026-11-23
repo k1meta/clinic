@@ -1,12 +1,11 @@
-import { eq, and, gte, lte, ne, count, sql, sum } from 'drizzle-orm';
+import { eq, and, gte, lt, lte, ne, count, sql, sum } from 'drizzle-orm';
 import { db } from '..';
 import { appointments, patients, doctors, treatmentTypes } from '../schema';
+import { todayInZone, zonedDayRange } from '@/lib/timezone';
 
-export async function getAppointmentsByDate(clinicId: string, date: Date) {
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
+/** `date` is a clinic-local YYYY-MM-DD. */
+export async function getAppointmentsByDate(clinicId: string, date: string, timeZone: string) {
+  const { start, end } = zonedDayRange(date, timeZone);
 
   return db
     .select({
@@ -42,8 +41,8 @@ export async function getAppointmentsByDate(clinicId: string, date: Date) {
     .where(
       and(
         eq(appointments.clinicId, clinicId),
-        gte(appointments.startsAt, startOfDay),
-        lte(appointments.startsAt, endOfDay),
+        gte(appointments.startsAt, start),
+        lt(appointments.startsAt, end),
         ne(appointments.status, 'cancelled'),
       )
     )
@@ -70,12 +69,11 @@ export async function getTodayAppointmentCount(clinicId: string) {
   return total;
 }
 
-export async function getUpcomingAppointments(clinicId: string, limit = 5) {
+export async function getUpcomingAppointments(clinicId: string, timeZone: string, limit = 5) {
   const now = new Date();
   // Only show today's remaining appointments on the overview page; tomorrow's
   // and beyond live in /calendar. Also drop cancelled rows.
-  const endOfDay = new Date();
-  endOfDay.setHours(23, 59, 59, 999);
+  const endOfDay = zonedDayRange(todayInZone(timeZone, now), timeZone).end;
 
   return db
     .select({
@@ -101,7 +99,7 @@ export async function getUpcomingAppointments(clinicId: string, limit = 5) {
       and(
         eq(appointments.clinicId, clinicId),
         gte(appointments.startsAt, now),
-        lte(appointments.startsAt, endOfDay),
+        lt(appointments.startsAt, endOfDay),
         ne(appointments.status, 'cancelled'),
       )
     )

@@ -2,15 +2,20 @@
 
 import { getClinicId } from '@/db/queries/auth';
 import { getClinicSettings } from '@/db/queries/clinics';
-import { getCallStatsThisWeek, getRecentCallsByClinic } from '@/db/queries/calls';
+import { getCallStatsThisWeek, getOpenCallbacks, getRecentCallsByClinic } from '@/db/queries/calls';
+import { getVoiceNumbersByClinic } from '@/db/queries/voice-numbers';
+import CallbackList from '@/components/CallbackList';
 import CallTranscriptPanel from '@/components/CallTranscriptPanel';
+import ForwardingGuide from '@/components/ForwardingGuide';
 
 export default async function VoiceAIPage() {
   const clinicId = await getClinicId();
-  const [settings, stats, recent] = await Promise.all([
+  const [settings, stats, recent, callbacks, numbers] = await Promise.all([
     getClinicSettings(clinicId),
     getCallStatsThisWeek(clinicId),
     getRecentCallsByClinic(clinicId, 20),
+    getOpenCallbacks(clinicId),
+    getVoiceNumbersByClinic(clinicId),
   ]);
 
   return (
@@ -21,7 +26,7 @@ export default async function VoiceAIPage() {
             Voice AI Control Center
           </h2>
           <p className="text-on-surface-variant mt-1">
-            Real-time AI pozivi — Retell (BCS) i ElevenLabs (English) za zakazivanje, pomjeranje i otkazivanje.
+            AI se javlja na pozive koje ne stignete primiti i zakazuje, pomjera ili otkazuje termine.
           </p>
         </div>
       </div>
@@ -71,13 +76,16 @@ export default async function VoiceAIPage() {
         <div className="col-span-12 lg:col-span-4 glass-card p-6 rounded-xl ai-spark-border flex flex-col shadow-sm">
           <h3 className="font-headline font-bold text-on-surface mb-3">Transcripts</h3>
           <p className="text-sm text-on-surface-variant leading-relaxed">
-            Select any call below to read the full conversation. ElevenLabs and Retell post-call webhooks
-            populate transcripts automatically when the worker is running.
+            Select any call below to read the full conversation.
           </p>
           <p className="text-xs text-on-surface-variant mt-4">
             {recent.filter((c) => c.transcript?.trim()).length} of {recent.length} recent calls have transcripts.
           </p>
         </div>
+
+        <CallbackList callbacks={callbacks} timeZone={settings.timezone} />
+
+        <ForwardingGuide numbers={numbers.filter((n) => n.isActive).map((n) => n.e164)} />
 
         <CallTranscriptPanel calls={recent} />
       </div>

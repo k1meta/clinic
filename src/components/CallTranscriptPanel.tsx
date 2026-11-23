@@ -105,7 +105,7 @@ export default function CallTranscriptPanel({ calls, initialCallId }: Props) {
         <span className="material-symbols-outlined text-4xl text-outline mb-3">phone_in_talk</span>
         <p className="text-sm text-on-surface-variant">No calls recorded yet</p>
         <p className="text-xs text-on-surface-variant mt-2">
-          Transcripts appear after post-call webhooks from Retell or ElevenLabs.
+          Transcripts appear a few seconds after each call ends.
         </p>
       </div>
     );
@@ -234,7 +234,7 @@ export default function CallTranscriptPanel({ calls, initialCallId }: Props) {
                   <span className="material-symbols-outlined text-4xl text-outline mb-3">call_end</span>
                   <p className="text-sm text-on-surface-variant">No transcript for this call yet</p>
                   <p className="text-xs text-on-surface-variant mt-2 max-w-sm">
-                    Ensure post-call webhook is configured and the worker is running.
+                    Check that the post-call webhook points at this app (npm run voice:setup).
                   </p>
                 </div>
               )}

@@ -1,7 +1,8 @@
 import { db } from '@/db';
 import { appointments, automations, messages } from '@/db/schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray } from 'drizzle-orm';
 import { addSendMessageJob } from '@/lib/queue';
+import { reminderWindowStart } from '@/lib/reminder-window';
 
 /** Milliseconds from now until exactly 2 h before `startsAt`. Null if that moment has passed. */
 export function compute2hReminderDelayMs(startsAt: Date): number | null {
@@ -69,6 +70,7 @@ export async function schedule2hReminderIfEligible(params: {
         eq(messages.appointmentId, appointmentId),
         eq(messages.type, 'reminder_2h'),
         eq(messages.direction, 'outbound'),
+        gte(messages.createdAt, reminderWindowStart(new Date(apt.startsAt), 'reminder_2h')),
         inArray(messages.status, ['queued', 'sent', 'delivered', 'read']),
       ),
     )

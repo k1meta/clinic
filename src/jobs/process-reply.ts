@@ -4,6 +4,8 @@ import { appointments, doctors, patients, messages } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { sendMessage } from '@/lib/messaging';
 import { getNextAvailableSlots } from '@/lib/availability';
+import { getClinicSettings } from '@/db/queries/clinics';
+import { addDays, todayInZone } from '@/lib/timezone';
 import { generateConfirmation, generateCancellationAck, generateRescheduleOptions } from '@/lib/ai/messaging';
 import type { ProcessReplyJobData } from '@/lib/queue';
 
@@ -42,6 +44,8 @@ export async function processButtonReply(data: ProcessReplyJobData) {
     .where(eq(doctors.id, apt.doctorId))
     .limit(1);
 
+  const { timezone } = await getClinicSettings(clinicId);
+
   if (action === 'confirm') {
     // Update appointment status
     await db
@@ -50,8 +54,8 @@ export async function processButtonReply(data: ProcessReplyJobData) {
       .where(eq(appointments.id, appointmentId));
 
     const d = new Date(apt.startsAt);
-    const date = d.toLocaleDateString('hr-HR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const time = d.toLocaleTimeString('hr-HR', { hour: '2-digit', minute: '2-digit' });
+    const date = d.toLocaleDateString('hr-HR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: timezone });
+    const time = d.toLocaleTimeString('hr-HR', { hour: '2-digit', minute: '2-digit', timeZone: timezone });
     const content = await generateConfirmation(patient.fullName, date, time, doctor?.fullName ?? '');
 
     await sendMessage({
@@ -98,9 +102,7 @@ export async function processButtonReply(data: ProcessReplyJobData) {
 
   } else if (action === 'reschedule') {
     // Find available slots
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const fromDate = tomorrow.toISOString().slice(0, 10);
+    const fromDate = addDays(todayInZone(timezone), 1);
 
     const slots = await getNextAvailableSlots(clinicId, apt.doctorId, fromDate, 30, 5);
     const content = await generateRescheduleOptions(patient.fullName, slots);

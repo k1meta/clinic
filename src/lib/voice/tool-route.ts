@@ -1,87 +1,83 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { getClinicSettings } from '@/db/queries/clinics';
-import { verifyRetellSignature } from '@/lib/channels/voice/retell';
-import {
-  parseElevenLabsFlatToolBody,
-  parseVoiceToolRequest,
-  readElevenLabsIdsFromHeaders,
-  verifyElevenLabsSignature,
-  verifyVoiceToolsBearer,
-  voiceToolResponse,
-} from '@/lib/voice/tool-request';
+import { verifyVoiceBearer } from '@/lib/voice/auth';
+import type { VoiceContext } from '@/lib/voice/call-log';
+import { resolveClinicId } from '@/lib/voice/clinic-routing';
+import { logVoiceError } from '@/lib/voice/log';
+import { parseVoiceToolRequest } from '@/lib/voice/tool-request';
 
-export async function parseAuthorizedVoiceToolRequest(request: NextRequest) {
-  const raw = await request.text();
-  const retellSig =
-    request.headers.get('x-retell-signature') ??
-    request.headers.get('x-retell-signature-256') ??
-    request.headers.get('x-signature');
-  const elevenSig = request.headers.get('elevenlabs-signature');
-  const bearer = request.headers.get('authorization');
+type ToolReply =
+  | { ok: true; message: string; data?: Record<string, unknown> }
+  | { ok: false; error: string; code: string; data?: Record<string, unknown> };
 
-  const retellOk = retellSig ? verifyRetellSignature(raw, retellSig) : false;
-  const elevenOk = elevenSig ? verifyElevenLabsSignature(raw, elevenSig) : false;
-  const bearerOk = verifyVoiceToolsBearer(bearer);
-
-  if (!retellOk && !elevenOk && !bearerOk) {
-    if (process.env.RETELL_WEBHOOK_SECRET || process.env.ELEVENLABS_WEBHOOK_SECRET || process.env.VOICE_TOOLS_API_KEY) {
-      return { error: NextResponse.json({ error: 'Invalid signature or authorization' }, { status: 401 }) };
-    }
-  }
-
-  let body: unknown;
-  try {
-    body = JSON.parse(raw);
-  } catch {
-    return { error: NextResponse.json({ error: 'Invalid JSON payload' }, { status: 400 }) };
-  }
-
-  const elevenHeaders = readElevenLabsIdsFromHeaders(request.headers);
-  let parsed = parseVoiceToolRequest(body);
-  if (!parsed && body && typeof body === 'object') {
-    parsed = parseElevenLabsFlatToolBody(body as Record<string, unknown>, {
-      ...elevenHeaders,
-      rawBody: raw,
-    });
-  }
-  if (!parsed) {
-    return { error: NextResponse.json({ error: 'Unrecognized tool payload' }, { status: 400 }) };
-  }
-
-  if (!parsed.clinicId) {
-    return {
-      error: NextResponse.json(
-        { error: 'Missing clinicId in call metadata, tool args, or DEFAULT_CLINIC_ID' },
-        { status: 400 },
-      ),
-    };
-  }
-
-  const settings = await getClinicSettings(parsed.clinicId);
-  if (!settings.aiCalls) {
-    return {
-      error: NextResponse.json(
-        voiceToolResponse({
-          ok: false,
-          error: 'AI calling is disabled for this clinic.',
-          code: 'ai_calls_disabled',
-        }),
-        { status: 403 },
-      ),
-    };
-  }
-
-  return { parsed, settings };
+/**
+ * Business failures use HTTP 200: the agent must read `message` and recover, whereas
+ * a non-2xx status is treated by ElevenLabs as a broken tool.
+ */
+function reply(result: ToolReply, status = 200) {
+  return NextResponse.json(
+    result.ok
+      ? { success: true, message: result.message, ...(result.data ? { data: result.data } : {}) }
+      : { success: false, code: result.code, message: result.error, ...(result.data ? { data: result.data } : {}) },
+    { status },
+  );
 }
 
-export function okToolJson(
-  message: string,
-  data?: Record<string, unknown>,
-  status = 200,
+/** Auth, parsing and clinic routing shared by every /api/voice/tools route. */
+export function voiceTool(
+  handler: (ctx: VoiceContext, args: Record<string, unknown>) => Promise<ToolReply>,
 ) {
-  return NextResponse.json(voiceToolResponse({ ok: true, message, data }), { status });
-}
+  return async function POST(request: NextRequest) {
+    if (!verifyVoiceBearer(request.headers.get('authorization'))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-export function failToolJson(error: string, code?: string, status = 200) {
-  return NextResponse.json(voiceToolResponse({ ok: false, error, code }), { status });
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+
+    const parsed = parseVoiceToolRequest(body);
+    if (!parsed) {
+      return NextResponse.json({ error: 'Missing conversation_id' }, { status: 400 });
+    }
+
+    try {
+      const clinicId = await resolveClinicId(parsed.calledNumber);
+      if (!clinicId) {
+        return reply({ ok: false, code: 'unknown_number', error: 'Ovaj broj nije povezan s ordinacijom.' });
+      }
+      const settings = await getClinicSettings(clinicId);
+      if (!settings.aiCalls) {
+        return reply({
+          ok: false,
+          code: 'ai_calls_disabled',
+          error: 'Telefonsko zakazivanje je trenutno isključeno. Zamoli pozivaoca da nazove kasnije.',
+        });
+      }
+      return reply(
+        await handler(
+          {
+            clinicId,
+            conversationId: parsed.conversationId,
+            callerNumber: parsed.callerNumber,
+            calledNumber: parsed.calledNumber,
+          },
+          parsed.args,
+        ),
+      );
+    } catch (error) {
+      logVoiceError('tool failed', error);
+      return reply(
+        {
+          ok: false,
+          code: 'server_error',
+          error: 'Sistem trenutno ne radi. Ne potvrđuj nikakav termin. Zamoli pozivaoca da nazove kasnije.',
+        },
+        500,
+      );
+    }
+  };
 }

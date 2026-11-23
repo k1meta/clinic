@@ -2,6 +2,8 @@
 
 Front-office dashboard for private clinics and other appointment businesses in BiH. Sold as a monthly, white-label, multi-tenant SaaS. Staff need no technical knowledge.
 
+**Current status and what to do next: `NEXT_STEPS.md`.** Read it first; update it when a step is done.
+
 ## Goals
 - Reduce no-shows from ~20% to below 5%
 - An AI answers the phone when the business can't, and books the appointment
